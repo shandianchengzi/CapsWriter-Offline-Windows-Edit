@@ -6,13 +6,10 @@ import websockets
 from config import ClientConfig as Config
 from util.client_cosmic import Cosmic, console
 from util.client_check_websocket import check_websocket
-from util.client_hot_sub import hot_sub
 from util.client_rename_audio import rename_audio
-from util.client_strip_punc import strip_punc
 from util.client_write_md import write_md
 from util.client_type_result import type_result
-from util.client_quicker import 触发Quicker操作
-from util.hot_sub_rule import Quicker词典
+from util.client_format_text import format_text
 
 
 async def recv_result():
@@ -31,17 +28,9 @@ async def recv_result():
             if not message['is_final']:
                 continue
 
-            # 热词替换
-            text = hot_sub(text)
-
-            # 消除末尾标点
-            text = strip_punc(text)
-
-            # 触发 Quicker 操作
-            if text in Quicker词典:
-                await 触发Quicker操作(Quicker词典[text])
-            else:
-                # 打字
+            # 格式化文本
+            text = await format_text(text)
+            if not text.startswith("[QUICKER] "):
                 await type_result(text)
 
             file_audio = rename_audio(message['task_id'], text, message['time_start'])
