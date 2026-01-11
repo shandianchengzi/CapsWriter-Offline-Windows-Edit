@@ -9,6 +9,7 @@
    3. models.zip：解压后整个文件夹一起放到根目录。
 2. 双击 `start_client.exe` 启动客户端，双击 `start_server.exe` 启动服务端。
 3. 按下 `CapsLock` 键，开始录音，松开 `CapsLock` 键，结束录音，识别结果立马被输入。
+4. 除此之外，还支持音视频转录的功能，拖到 `start_client.exe` 上面（或通过命令行参数指定文件路径），会自动识别文件类型，然后转录成文字。
 
 如果你需要连接 Quicker 动作或者进行一些其他的配置，可以自行查看 `config.py`、`hot-rule.txt`、`hot-en.txt`、`hot-zh.txt` 这几个文件。
 
@@ -33,3 +34,5 @@
 ![alt text](assets/quicker.png)
 
 2. 支持不保存wav文件，只保存md文件。
+
+3. 新增对音视频文件的转录功能时的热词替换功能。

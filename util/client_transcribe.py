@@ -17,6 +17,7 @@ import typer
 import colorama
 from util import srt_from_txt
 from util.client_cosmic import console, Cosmic
+from util.client_hot_sub import hot_sub
 from util.client_check_websocket import check_websocket
 from config import ClientConfig as Config
 
@@ -95,6 +96,7 @@ async def transcribe_recv(file: Path):
 
     # 解析结果
     text_merge = message['text']
+    text_merge = hot_sub(text_merge)
     text_split = re.sub('[，。？]', '\n', text_merge)
     timestamps = message['timestamps']
     tokens = message['tokens']
@@ -115,4 +117,4 @@ async def transcribe_recv(file: Path):
 
     process_duration = message['time_complete'] - message['time_start']
     console.print(f'\033[K    处理耗时：{process_duration:.2f}s')
-    console.print(f'    识别结果：\n[green]{message["text"]}')
+    console.print(f'    识别结果：[green]{text_merge}')

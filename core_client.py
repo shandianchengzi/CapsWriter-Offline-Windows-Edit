@@ -84,6 +84,9 @@ async def main_mic():
 async def main_file(files: List[Path]):
     show_file_tips()
 
+    # 更新热词
+    update_hot_all()
+
     for file in files:
         if file.suffix in ['.txt', '.json', 'srt']:
             adjust_srt(file)
