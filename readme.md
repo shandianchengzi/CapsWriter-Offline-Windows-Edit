@@ -12,6 +12,8 @@
 
 如果你需要连接 Quicker 动作或者进行一些其他的配置，可以自行查看 `config.py`、`hot-rule.txt`、`hot-en.txt`、`hot-zh.txt` 这几个文件。
 
+要想连接 Quicker 动作，还要打开 Quicker 端的 WebSocket 设置，详见 Quicker 官方文档：[WebSocket 服务 - Quicker](https://getquicker.net/KC/Manual/Doc/websocketservice)。
+
 工具更详细可以去看作者的介绍，也可以直接点开我的这个 [readme-raw.md](readme-raw.md)，我拷贝了一份。
 
 接下来解释一下我的额外的更新。
@@ -27,4 +29,5 @@
 
 功能上的更新：
 1. 增加特定的词响应相关的Quicker动作，支持hot-rule.txt中添加动作的关联，如：
-代码 = fc190626-8d00-4562-85e3-34c0580f074f
+代码 = fc190626-8d00-4562-85e3-34c0580f074f。关于这个特性，我发了篇博客，更详细的介绍，可以在博客里面看：[【开源工具】离线语音识别接入Quicker，冬天懒得打字甚至懒得动就这样｜CapsWriter-Offline-Windows-Edit-CSDN博客](https://blog.csdn.net/qq_46106285/article/details/156833033)
+![alt text](assets/quicker.png)
