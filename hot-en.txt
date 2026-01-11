@@ -33,6 +33,7 @@ VSCode
 Quicker
 WebSocket
 ID
+ChatGPT
 
 # 杂项
 IP

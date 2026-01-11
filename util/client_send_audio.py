@@ -59,9 +59,8 @@ async def send_audio():
                     continue
 
                 # 创建音频文件
-                if Config.save_audio and not file_path:
-                    file_path, file = create_file(task['data'].shape[1], time_start)
-                    Cosmic.audio_files[task_id] = file_path
+                file_path, file = create_file(task['data'].shape[1], time_start)
+                Cosmic.audio_files[task_id] = file_path
 
                 # 获取音频数据
                 if cache:

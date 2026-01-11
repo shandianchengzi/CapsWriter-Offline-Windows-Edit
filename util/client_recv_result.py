@@ -44,12 +44,10 @@ async def recv_result():
                 # 打字
                 await type_result(text)
 
-            if Config.save_audio:
-                # 重命名录音文件
-                file_audio = rename_audio(message['task_id'], text, message['time_start'])
+            file_audio = rename_audio(message['task_id'], text, message['time_start'])
 
-                # 记录写入 md 文件
-                write_md(text, message['time_start'], file_audio)
+            # 记录写入 md 文件
+            write_md(text, message['time_start'], file_audio)
 
             # 控制台输出
             console.print(f'    转录时延：{delay:.2f}s')

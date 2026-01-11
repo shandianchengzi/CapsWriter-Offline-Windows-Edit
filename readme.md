@@ -31,3 +31,5 @@
 1. 增加特定的词响应相关的Quicker动作，支持hot-rule.txt中添加动作的关联，如：
 代码 = fc190626-8d00-4562-85e3-34c0580f074f。关于这个特性，我发了篇博客，更详细的介绍，可以在博客里面看：[【开源工具】离线语音识别接入Quicker，冬天懒得打字甚至懒得动就这样｜CapsWriter-Offline-Windows-Edit-CSDN博客](https://blog.csdn.net/qq_46106285/article/details/156833033)
 ![alt text](assets/quicker.png)
+
+2. 支持不保存wav文件，只保存md文件。
