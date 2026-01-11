@@ -2,7 +2,17 @@
 
 这仓库它是基于这个版本。我不会跟进作者的更新了，作者实际上也没有怎么更新，现在的版本已经很够我们用：https://github.com/HaujetZhao/CapsWriter-Offline/tree/a072f5312031e31706b294e9242d516fb8979fc6
 
-工具介绍或者使用方法也可以自行去看作者的介绍，也可以直接点开我的这个 [readme-raw.md](readme-raw.md)，我拷贝了一份。
+我省流介绍一下：
+1. 点开 https://github.com/shandianchengzi/CapsWriter-Offline-Windows-Edit/releases/tag/1 下载以下3个文件：
+   1. Source code (zip)：下载之后先解压，然后把整个文件夹打开，这个文件夹是根目录。
+   2. ffmpeg.exe：放到根目录。
+   3. models.zip：解压后整个文件夹一起放到根目录。
+2. 双击 `start_client.exe` 启动客户端，双击 `start_server.exe` 启动服务端。
+3. 按下 `CapsLock` 键，开始录音，松开 `CapsLock` 键，结束录音，识别结果立马被输入。
+
+如果你需要连接 Quicker 动作或者进行一些其他的配置，可以自行查看 `config.py`、`hot-rule.txt`、`hot-en.txt`、`hot-zh.txt` 这几个文件。
+
+工具更详细可以去看作者的介绍，也可以直接点开我的这个 [readme-raw.md](readme-raw.md)，我拷贝了一份。
 
 接下来解释一下我的额外的更新。
 
