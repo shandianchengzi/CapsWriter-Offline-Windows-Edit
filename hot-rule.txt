@@ -18,3 +18,6 @@
 叉叉叉 = xxx
 pilot = Copilot
 冒号 = ：
+
+# Quicker 动作映射。如果你没装 Quicker 请删除这部分
+代码 = fc190626-8d00-4562-85e3-34c0580f074f

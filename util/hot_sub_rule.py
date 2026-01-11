@@ -24,17 +24,10 @@ import re
 
 '''
 
-
-
 __all__ = ['更新热词词典', '热词替换']
 
 模式词典 = {}
 Quicker词典 = {}
-
-def 触发Quicker操作(动作ID: str):
-    # TODO: 通过 web socket触发Quicker操作
-    pass
-
 
 def 更新热词词典(热词文本: str):
     '''
@@ -44,15 +37,24 @@ def 更新热词词典(热词文本: str):
     '''
     global 模式词典; 模式词典.clear()
     global Quicker词典; Quicker词典.clear()
+    
+    # Quicker 动作 ID 的正则格式 (UUID)
+    # 示例: 0d880d7d-c965-43e3-a2e1-ad782a3afdbc
+    uuid_pattern = re.compile(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', re.IGNORECASE)
+
     for 热词 in 热词文本.splitlines():
-        # TODO:检测 value 是否与 quicker 的 id 的格式一致，去填充 quicker 词典
-        pass
         if not 热词 or 热词.startswith('#'): continue
         key_value = 热词.split(' = ')
         if len(key_value) == 2:
             key = key_value[0].strip()
             value = key_value[1].strip()
-            模式词典[key] = value
+            
+            # 检测是否为 Quicker ID
+            if uuid_pattern.match(value):
+                Quicker词典[key] = value
+            else:
+                模式词典[key] = value
+                
     return len(模式词典)+len(Quicker词典)
 
 
@@ -61,12 +63,6 @@ def 匹配热词(句子:str):
     将全局「热词词典」中的热词按照 key 依次与句子匹配，将所有匹配到的热词放到列表
     '''
     global 模式词典
-    global Quicker词典
-
-    for 模式 in Quicker词典:
-        if 模式 == 句子:
-            触发Quicker操作(Quicker词典[模式])
-            return []
 
     所有匹配 = []
     for 模式 in 模式词典:

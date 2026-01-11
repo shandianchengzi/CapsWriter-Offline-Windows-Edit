@@ -30,6 +30,9 @@ ModelScope
 HuggingFace
 Claude
 VSCode
+Quicker
+WebSocket
+ID
 
 # 杂项
 IP
