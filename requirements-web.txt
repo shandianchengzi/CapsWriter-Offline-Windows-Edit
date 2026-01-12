@@ -1,4 +1,3 @@
-sounddevice
 websockets
 pypinyin
 flask

@@ -1,6 +1,6 @@
 import os
 
-from util.client_cosmic import console
+from util.client_console import console
 from config import ClientConfig as Config
 from rich.markdown import Markdown
 

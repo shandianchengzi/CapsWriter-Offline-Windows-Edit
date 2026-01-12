@@ -1,6 +1,7 @@
 
 import websockets 
-from util.client_cosmic import Cosmic, console
+from util.client_cosmic import Cosmic
+from util.client_console import console
 from config import ClientConfig as Config
 
 

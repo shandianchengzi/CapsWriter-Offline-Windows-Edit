@@ -1,6 +1,6 @@
 from os import getcwd, sep, path
 import time
-from util.client_cosmic import console
+from util.client_console import console
 from util import hot_sub_zh
 from util import hot_sub_en
 from util import hot_sub_rule

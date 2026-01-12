@@ -15,7 +15,8 @@ import colorama
 import keyboard
 
 from config import ClientConfig as Config
-from util.client_cosmic import console, Cosmic
+from util.client_cosmic import Cosmic
+from util.client_console import console
 from util.client_stream import stream_open, stream_close
 from util.client_shortcut_handler import bond_shortcut
 from util.client_recv_result import recv_result

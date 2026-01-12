@@ -4,7 +4,8 @@ import json
 import keyboard
 import websockets
 from config import ClientConfig as Config
-from util.client_cosmic import Cosmic, console
+from util.client_cosmic import Cosmic
+from util.client_console import console
 from util.client_check_websocket import check_websocket
 from util.client_rename_audio import rename_audio
 from util.client_write_md import write_md

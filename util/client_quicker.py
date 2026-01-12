@@ -2,7 +2,8 @@ import asyncio
 import json
 import websockets
 from websockets.exceptions import ConnectionClosed
-from util.client_cosmic import console
+from util.client_console import console
+
 
 __all__ = ['设置Quicker配置', '触发Quicker操作']
 

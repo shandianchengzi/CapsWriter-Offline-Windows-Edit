@@ -16,7 +16,8 @@ import websockets
 import typer
 import colorama
 from util import srt_from_txt
-from util.client_cosmic import console, Cosmic
+from util.client_cosmic import Cosmic
+from util.client_console import console
 from util.client_format_text import format_text
 from util.client_check_websocket import check_websocket
 from config import ClientConfig as Config

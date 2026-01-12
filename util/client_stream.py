@@ -1,11 +1,11 @@
 
-from util.client_cosmic import console, Cosmic
+from util.client_cosmic import Cosmic
+from util.client_console import console
 import numpy as np 
 import sounddevice as sd
 import asyncio
 import sys
 import time
-from rich import inspect
 import threading
 
 
