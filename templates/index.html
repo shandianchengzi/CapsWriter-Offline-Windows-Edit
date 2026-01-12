@@ -79,16 +79,38 @@
                     @dragleave.prevent="isDragging = false"
                     @drop.prevent="handleDrop"
                 >
+                    <!-- 拖拽遮罩 (保持不变) -->
                     <div class="drag-overlay absolute inset-0 bg-blue-500/20 backdrop-blur-sm z-50 flex flex-col items-center justify-center border-4 border-blue-500 border-dashed rounded-xl m-1">
                         <p class="text-white text-2xl font-bold drop-shadow-md">释放文件以加载</p>
                     </div>
 
+                    <!-- 空状态提示 (保持不变) -->
                     <div v-if="!mediaUrl" class="absolute inset-0 flex flex-col items-center justify-center cursor-pointer hover:bg-white/5 transition-colors z-10" @click="$refs.fileInput.click()">
                         <p class="text-slate-400 font-medium group-hover:text-slate-200">点击或拖拽选择音视频文件</p>
                         <p v-if="subtitles.length > 0" class="text-xs text-orange-400 mt-2">已恢复上次字幕记录，请重新加载对应的音视频文件</p>
                     </div>
                     
-                    <video v-else ref="videoPlayer" class="w-full h-full object-contain z-20" controls :src="mediaUrl" @loadedmetadata="onMediaLoaded"></video>
+                    <!-- 视频播放器 (修改了这里：增加了 @timeupdate) -->
+                    <video 
+                        v-else 
+                        ref="videoPlayer" 
+                        class="w-full h-full object-contain z-20" 
+                        controls 
+                        :src="mediaUrl" 
+                        @loadedmetadata="onMediaLoaded"
+                        @timeupdate="onTimeUpdate" 
+                    ></video>
+                    
+                    <!-- 新增：实时字幕渲染层 (B站风格) -->
+                    <div v-if="mediaUrl && currentSubtitleText" class="absolute bottom-12 left-0 right-0 z-30 pointer-events-none text-center px-4">
+                        <span 
+                            class="inline-block text-white font-bold text-2xl lg:text-3xl whitespace-pre-wrap leading-tight"
+                            style="text-shadow: 1px 1px 2px black, 0 0 1em black, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000;"
+                        >
+                            {{ currentSubtitleText }}
+                        </span>
+                    </div>
+
                     <input type="file" ref="fileInput" class="hidden" accept="video/*,audio/*" @change="handleFileSelect">
                 </div>
 
@@ -225,6 +247,7 @@
         createApp({
             setup() {
                 // 状态定义
+                const currentTime = ref(0);
                 const config = ref({ host: '127.0.0.1', port: '6016' });
                 const currentFile = ref(null);
                 const mediaUrl = ref('');
@@ -251,6 +274,21 @@
                     const r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
                     return v.toString(16);
                 });
+
+                // 字符串 "00:00:01,500" 转 秒数 1.5
+                const parseTime = (timeStr) => {
+                    if (!timeStr) return 0;
+                    // 处理可能的格式差异，替换中文冒号等
+                    const str = timeStr.replace('：', ':').replace(',', '.');
+                    const parts = str.split(':');
+                    let seconds = 0;
+                    if (parts.length === 3) {
+                        seconds = parseFloat(parts[0]) * 3600 + parseFloat(parts[1]) * 60 + parseFloat(parts[2]);
+                    } else if (parts.length === 2) {
+                        seconds = parseFloat(parts[0]) * 60 + parseFloat(parts[1]);
+                    }
+                    return seconds;
+                };
 
                 // --- 本地存储逻辑 ---
                 const saveState = () => {
@@ -500,7 +538,7 @@
                     if(!videoPlayer.value) return; 
                     const [h,m,s] = t.replace(',','.').split(':'); 
                     videoPlayer.value.currentTime = parseFloat(h)*3600 + parseFloat(m)*60 + parseFloat(s); 
-                    videoPlayer.value.pause();
+                    videoPlayer.value.play();
                 };
                 
                 const autoResize = (e) => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; };
@@ -538,9 +576,25 @@
                     downloadFile(JSON.stringify(subtitles.value, null, 2), '.json');
                 };
 
+                const currentSubtitleText = computed(() => {
+                    const cur = currentTime.value;
+                    // 找到当前时间所在的字幕行
+                    const sub = subtitles.value.find(s => {
+                        const start = parseTime(s.start);
+                        const end = parseTime(s.end);
+                        //稍微加一点缓冲容错(0.1s)，让字幕衔接更自然
+                        return cur >= start && cur <= end - 0.1; 
+                    });
+                    return sub ? sub.text : '';
+                });
+
+                const onTimeUpdate = (e) => {
+                    currentTime.value = e.target.currentTime;
+                };
+
                 return { 
                     config, currentFile, mediaUrl, mediaDuration, status, progress, isProcessing, processingTime, subtitles, errorMsg, videoPlayer, isDragging,
-                    toggles, targetLang, editor, exportConfig,
+                    toggles, targetLang, editor, exportConfig, onTimeUpdate, currentSubtitleText,
                     processAudio, exportSRT, exportTXT, exportJSON, autoResize, handleFileSelect, handleDrop, formatFileSize, onMediaLoaded,
                     insertAtCurrent, syncTime, removeSub, seekTo,
                     openEditor, saveFile, translateAll
