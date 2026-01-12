@@ -4,7 +4,6 @@ from flask import Flask, render_template, request, jsonify
 from util import hot_sub_en
 from util import hot_sub_zh
 from util import hot_sub_rule
-from util.client_strip_punc import strip_punc
 
 app = Flask(__name__)
 
@@ -85,9 +84,6 @@ def process_text():
     # 3. 热点规则替换
     if 'rule' in types:
         text = hot_sub_rule.热词替换(text)
-
-    # 4. 去除末尾标点
-    text = strip_punc(text)
     
     # 返回处理后的文本（此处暂返回原文本）
     return jsonify({'result': text})

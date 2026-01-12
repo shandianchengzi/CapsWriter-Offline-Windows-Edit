@@ -24,7 +24,6 @@
 </head>
 <body class="bg-slate-900 text-slate-200 h-screen overflow-hidden flex flex-col font-sans">
     
-    <!-- 添加 raw 标签，告诉 Flask/Jinja2 忽略此区域的解析，直接原样输出给 Vue -->
     {% raw %}
     <div id="app" class="flex flex-col h-full max-w-[1600px] mx-auto w-full p-4 gap-4">
         
@@ -86,9 +85,10 @@
 
                     <div v-if="!mediaUrl" class="absolute inset-0 flex flex-col items-center justify-center cursor-pointer hover:bg-white/5 transition-colors z-10" @click="$refs.fileInput.click()">
                         <p class="text-slate-400 font-medium group-hover:text-slate-200">点击或拖拽选择音视频文件</p>
+                        <p v-if="subtitles.length > 0" class="text-xs text-orange-400 mt-2">已恢复上次字幕记录，请重新加载对应的音视频文件</p>
                     </div>
                     
-                    <video v-else ref="videoPlayer" class="w-full h-full object-contain z-20" controls :src="mediaUrl"></video>
+                    <video v-else ref="videoPlayer" class="w-full h-full object-contain z-20" controls :src="mediaUrl" @loadedmetadata="onMediaLoaded"></video>
                     <input type="file" ref="fileInput" class="hidden" accept="video/*,audio/*" @change="handleFileSelect">
                 </div>
 
@@ -96,9 +96,11 @@
                 <div class="bg-slate-800 p-5 rounded-xl border border-slate-700 shrink-0">
                     <div class="flex justify-between items-center mb-4">
                         <div class="flex flex-col min-w-0">
-                            <!-- Jinja 会忽略这里的 {{ }}，交给 Vue 处理 -->
                             <span class="text-white font-semibold truncate">{{ currentFile ? currentFile.name : '未选择文件' }}</span>
-                            <span class="text-xs text-slate-500" v-if="currentFile">{{ formatFileSize(currentFile.size) }}</span>
+                            <div class="flex gap-3 text-xs text-slate-500 mt-1">
+                                <span v-if="currentFile">{{ formatFileSize(currentFile.size) }}</span>
+                                <span v-if="mediaDuration > 0" class="text-blue-400">预计耗时: {{ (mediaDuration / 72).toFixed(1) }}s~{{ (mediaDuration / 16).toFixed(1) }}s</span>
+                            </div>
                         </div>
                         <span class="text-blue-400 font-bold ml-4">{{ progress }}%</span>
                     </div>
@@ -110,13 +112,12 @@
             </div>
 
             <!-- 右侧字幕区 -->
-            <div class="lg:w-[550px] flex flex-col bg-slate-800 rounded-xl border border-slate-700 shadow-xl overflow-hidden h-full">
+            <div class="lg:w-[580px] flex flex-col bg-slate-800 rounded-xl border border-slate-700 shadow-xl overflow-hidden h-full">
                 
                 <!-- 工具栏 1: 翻译与文件编辑 -->
                 <div class="p-3 border-b border-slate-700 bg-slate-800/95 backdrop-blur z-20 flex flex-col gap-3">
                     <div class="flex justify-between items-center">
                         <div class="flex gap-2">
-                             <!-- 文件编辑按钮 -->
                              <button @click="openEditor('hot-en.txt')" class="text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 px-2 py-1 rounded border border-slate-600">En热词</button>
                              <button @click="openEditor('hot-zh.txt')" class="text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 px-2 py-1 rounded border border-slate-600">Zh热词</button>
                              <button @click="openEditor('hot-rule.txt')" class="text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 px-2 py-1 rounded border border-slate-600">规则</button>
@@ -129,44 +130,64 @@
                                 <option value="ko">한국어</option>
                             </select>
                             <button @click="translateAll" :disabled="!subtitles.length" class="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1 rounded transition-colors flex items-center gap-1">
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3 h-3"><path d="M7.75 2.75a.75.75 0 00-1.5 0v1.258a32.987 32.987 0 00-3.599.278.75.75 0 10.198 1.487A31.545 31.545 0 018.7 5.545 19.381 19.381 0 017 9.56a19.418 19.418 0 01-1.002-2.044.75.75 0 00-1.388.395 20.929 20.929 0 001.294 2.639 11.95 11.95 0 01-1.043 1.485 20.972 20.972 0 00-3.46 1.252.75.75 0 10.706 1.32C3.842 13.911 5.485 13.102 7 12.5c.313.123.616.26.908.408.81.41 1.637.766 2.492 1.054a.75.75 0 10.5-1.415 17.587 17.587 0 01-2.39-1.006A17.96 17.96 0 0110 8c.288-.636.54-1.29.743-1.96.16-.525.295-1.062.4-1.608a.75.75 0 10-1.47-.294A18.066 18.066 0 019.5 5.545v-2.8zM14 8a.75.75 0 00-.75.75v5.5c0 .414.336.75.75.75h5.5a.75.75 0 000-1.5h-3.69l3.97-3.97a.75.75 0 10-1.06-1.06l-3.97 3.97V8.75A.75.75 0 0014 8z" /></svg>
                                 翻译全文
                             </button>
                         </div>
                     </div>
                 </div>
 
-                <!-- 工具栏 2: 基础操作 -->
-                <div class="px-3 py-2 border-b border-slate-700 bg-slate-800 flex justify-between items-center text-xs">
-                    <span class="text-slate-500">{{ subtitles.length }} 行</span>
-                    <div class="flex gap-2">
-                         <button @click="insertAtCurrent" :disabled="!mediaUrl" class="bg-blue-600/20 hover:bg-blue-600 text-blue-400 hover:text-white border border-blue-600/30 px-2 py-1 rounded transition-all">插入</button>
-                        <button @click="exportSRT" :disabled="!subtitles.length" class="bg-green-600/20 hover:bg-green-600 text-green-400 hover:text-white border border-green-600/30 px-2 py-1 rounded transition-all">导出</button>
+                <!-- 工具栏 2: 基础操作与导出设置 -->
+                <div class="px-3 py-2 border-b border-slate-700 bg-slate-800 flex flex-col gap-2 text-xs">
+                    <div class="flex justify-between items-center">
+                        <span class="text-slate-500 font-mono">{{ subtitles.length }} Lines</span>
+                        <div class="flex gap-2">
+                             <button @click="insertAtCurrent" :disabled="!mediaUrl" class="bg-blue-600/20 hover:bg-blue-600 text-blue-400 hover:text-white border border-blue-600/30 px-2 py-1 rounded transition-all">插入</button>
+                        </div>
+                    </div>
+                    
+                    <!-- 导出区域 -->
+                    <div class="flex items-center justify-between bg-slate-900/50 p-2 rounded border border-slate-700/50">
+                        <div class="flex items-center gap-2">
+                            <label class="flex items-center cursor-pointer gap-1 select-none" title="导出SRT时移除末尾指定标点">
+                                <input type="checkbox" v-model="exportConfig.cleanSrt" class="rounded bg-slate-700 border-slate-600 text-blue-500 focus:ring-0 w-3 h-3">
+                                <span class="text-slate-400">SRT去标点</span>
+                            </label>
+                            <input v-if="exportConfig.cleanSrt" v-model="exportConfig.punctuation" class="bg-slate-800 border border-slate-600 text-slate-300 px-1 py-0.5 rounded w-16 text-center outline-none focus:border-blue-500" placeholder="，。,." title="输入要移除的结尾符号">
+                        </div>
+                        <div class="flex gap-1">
+                            <button @click="exportTXT" :disabled="!subtitles.length" class="bg-slate-700 hover:bg-slate-600 text-slate-300 px-2 py-1 rounded transition-all border border-slate-600">TXT</button>
+                            <button @click="exportJSON" :disabled="!subtitles.length" class="bg-slate-700 hover:bg-slate-600 text-slate-300 px-2 py-1 rounded transition-all border border-slate-600">JSON</button>
+                            <button @click="exportSRT" :disabled="!subtitles.length" class="bg-green-600/20 hover:bg-green-600 text-green-400 hover:text-white border border-green-600/30 px-2 py-1 rounded transition-all">SRT</button>
+                        </div>
                     </div>
                 </div>
                 
                 <!-- 列表 -->
-                <div class="flex-1 overflow-y-auto p-2 space-y-2 relative" ref="subtitleList">
+                <div class="flex-1 overflow-y-auto p-2 space-y-2 relative scroll-smooth" ref="subtitleList">
                     <div v-if="subtitles.length === 0" class="h-full flex flex-col items-center justify-center text-slate-500 opacity-50">
                         <p class="text-sm">暂无字幕数据</p>
                     </div>
 
-                    <div v-for="(sub, idx) in subtitles" :key="idx" class="group bg-slate-900/40 hover:bg-slate-900/80 border border-slate-700/50 hover:border-slate-600 rounded-lg p-3 transition-all duration-200">
+                    <div v-for="(sub, idx) in subtitles" 
+                         :key="idx" 
+                         class="group bg-slate-900/40 hover:bg-slate-900/80 border border-slate-700/50 hover:border-slate-600 rounded-lg p-3 transition-all duration-200 cursor-pointer"
+                         @click="seekTo(sub.start)"
+                    >
                         <div class="flex items-center gap-2 mb-2">
-                            <span @click="seekTo(sub.start)" class="text-slate-500 w-6 text-right text-xs cursor-pointer hover:text-blue-400 font-mono select-none">{{ idx + 1 }}</span>
+                            <span class="text-slate-500 w-6 text-right text-xs font-mono select-none">{{ idx + 1 }}</span>
                             <div class="relative flex items-center">
-                                <input v-model="sub.start" class="time-input">
-                                <button @click="syncTime(idx, 'start')" class="ml-1 text-slate-600 hover:text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity">⏱️</button>
+                                <input v-model="sub.start" class="time-input" @click.stop @input.stop>
+                                <button @click.stop="syncTime(idx, 'start')" class="ml-1 text-slate-600 hover:text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity">⏱️</button>
                             </div>
                             <span class="text-slate-600 text-xs">→</span>
                             <div class="relative flex items-center">
-                                <input v-model="sub.end" class="time-input">
-                                <button @click="syncTime(idx, 'end')" class="ml-1 text-slate-600 hover:text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity">⏱️</button>
+                                <input v-model="sub.end" class="time-input" @click.stop @input.stop>
+                                <button @click.stop="syncTime(idx, 'end')" class="ml-1 text-slate-600 hover:text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity">⏱️</button>
                             </div>
                             <div class="flex-1"></div>
-                            <button @click="removeSub(idx)" class="text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity">🗑️</button>
+                            <button @click.stop="removeSub(idx)" class="text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity">🗑️</button>
                         </div>
-                        <textarea v-model="sub.text" rows="1" class="w-full bg-transparent text-slate-200 text-sm focus:outline-none resize-none leading-relaxed pl-8 border-l-2 border-transparent focus:border-blue-500/50 transition-colors" @input="autoResize"></textarea>
+                        <textarea v-model="sub.text" rows="1" class="w-full bg-transparent text-slate-200 text-sm focus:outline-none resize-none leading-relaxed pl-8 border-l-2 border-transparent focus:border-blue-500/50 transition-colors" @click.stop @input="autoResize"></textarea>
                     </div>
                     <div class="h-10"></div>
                 </div>
@@ -192,13 +213,15 @@
     {% endraw %}
 
     <script>
-        const { createApp, ref, nextTick } = Vue;
+        const { createApp, ref, nextTick, computed, watch, onMounted } = Vue;
 
         createApp({
             setup() {
+                // 状态定义
                 const config = ref({ host: '127.0.0.1', port: '6016' });
                 const currentFile = ref(null);
                 const mediaUrl = ref('');
+                const mediaDuration = ref(0);
                 const status = ref('就绪');
                 const progress = ref(0);
                 const isProcessing = ref(false);
@@ -207,20 +230,64 @@
                 const videoPlayer = ref(null);
                 const isDragging = ref(false);
                 
-                // 新增状态
                 const targetLang = ref('en');
                 const toggles = ref({ enHot: false, zhHot: false, rule: false });
+                const exportConfig = ref({ cleanSrt: false, punctuation: '"，。,.' });
                 const editor = ref({ visible: false, filename: '', content: '' });
 
-                // UUID
+                // 本地存储键名
+                const STORAGE_KEY = 'cw_flask_app_state_v1';
+
+                // UUID 生成
                 const uuidv4 = () => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
                     const r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
                     return v.toString(16);
                 });
 
-                // --- 1. Flask 交互逻辑 ---
-                
-                // 打开编辑器
+                // --- 本地存储逻辑 ---
+                const saveState = () => {
+                    const state = {
+                        config: config.value,
+                        toggles: toggles.value,
+                        targetLang: targetLang.value,
+                        exportConfig: exportConfig.value,
+                        subtitles: subtitles.value // 保存字幕结果
+                    };
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+                };
+
+                const loadState = () => {
+                    const saved = localStorage.getItem(STORAGE_KEY);
+                    if (saved) {
+                        try {
+                            const parsed = JSON.parse(saved);
+                            if (parsed.config) config.value = parsed.config;
+                            if (parsed.toggles) toggles.value = parsed.toggles;
+                            if (parsed.targetLang) targetLang.value = parsed.targetLang;
+                            if (parsed.exportConfig) exportConfig.value = parsed.exportConfig;
+                            if (parsed.subtitles && Array.isArray(parsed.subtitles)) {
+                                subtitles.value = parsed.subtitles;
+                                nextTick(() => document.querySelectorAll('textarea').forEach(el => autoResize({target: el})));
+                            }
+                        } catch (e) { console.error('Failed to load state', e); }
+                    }
+                };
+
+                // 监听变化自动保存
+                watch([config, toggles, targetLang, exportConfig, subtitles], () => {
+                    saveState();
+                }, { deep: true });
+
+                onMounted(() => {
+                    loadState();
+                });
+
+                // --- 视频相关 ---
+                const onMediaLoaded = (e) => {
+                    mediaDuration.value = e.target.duration;
+                };
+
+                // --- Flask 交互 ---
                 const openEditor = async (filename) => {
                     editor.value.filename = filename;
                     editor.value.visible = true;
@@ -229,12 +296,9 @@
                         const data = await res.json();
                         if(data.error) throw new Error(data.error);
                         editor.value.content = data.content;
-                    } catch (e) {
-                        alert('加载文件失败: ' + e.message);
-                    }
+                    } catch (e) { alert('加载文件失败: ' + e.message); }
                 };
 
-                // 保存文件
                 const saveFile = async () => {
                     try {
                         const res = await fetch(`/api/file/${editor.value.filename}`, {
@@ -243,24 +307,15 @@
                             body: JSON.stringify({ content: editor.value.content })
                         });
                         const data = await res.json();
-                        if(data.success) {
-                            editor.value.visible = false;
-                        } else {
-                            alert('保存失败: ' + data.error);
-                        }
-                    } catch (e) {
-                        alert('保存异常: ' + e.message);
-                    }
+                        if(data.success) editor.value.visible = false;
+                        else alert('保存失败: ' + data.error);
+                    } catch (e) { alert('保存异常: ' + e.message); }
                 };
 
-                // 翻译全部 (逐句调用 Flask 接口)
                 const translateAll = async () => {
                     if(!subtitles.value.length) return;
-                    // 标记状态
                     const originalStatus = status.value;
                     status.value = '正在翻译...';
-                    
-                    // 并行或串行处理，这里用简单的Promise.all
                     const promises = subtitles.value.map(async (sub) => {
                         try {
                             const res = await fetch('/api/translate', {
@@ -269,26 +324,20 @@
                                 body: JSON.stringify({ text: sub.text, lang: targetLang.value })
                             });
                             const data = await res.json();
-                            // 将翻译结果追加到原文本后，或者替换，这里演示追加
                             sub.text = `${sub.text}\n${data.result}`;
                         } catch(e) { console.error(e); }
                     });
-
                     await Promise.all(promises);
                     status.value = originalStatus;
                     nextTick(() => document.querySelectorAll('textarea').forEach(el => autoResize({target: el})));
                 };
 
-                // 文本预处理 (调用 Flask)
                 const processTextViaBackend = async (text) => {
-                    // 收集开启的开关
                     const activeTypes = [];
                     if(toggles.value.enHot) activeTypes.push('en-hot');
                     if(toggles.value.zhHot) activeTypes.push('zh-hot');
                     if(toggles.value.rule) activeTypes.push('rule');
-
                     if(activeTypes.length === 0) return text;
-
                     try {
                         const res = await fetch('/api/process_text', {
                             method: 'POST',
@@ -297,18 +346,21 @@
                         });
                         const data = await res.json();
                         return data.result;
-                    } catch(e) {
-                        console.error('Text processing failed', e);
-                        return text;
-                    }
+                    } catch(e) { return text; }
                 };
 
-                // --- 2. 基础逻辑 (维持不变) ---
-
+                // --- 基础逻辑 ---
                 const handleFileSelect = (e) => processFile(e.target.files[0]);
                 const handleDrop = (e) => { isDragging.value = false; processFile(e.dataTransfer.files[0]); };
                 const processFile = (file) => {
-                    if (file) { currentFile.value = file; mediaUrl.value = URL.createObjectURL(file); subtitles.value = []; errorMsg.value = ''; progress.value = 0; }
+                    if (file) { 
+                        currentFile.value = file; 
+                        mediaUrl.value = URL.createObjectURL(file); 
+                        // 新文件重置字幕，除非你想追加？通常是清空
+                        subtitles.value = []; 
+                        errorMsg.value = ''; 
+                        progress.value = 0; 
+                    }
                 };
                 const formatFileSize = (bytes) => {
                     if (bytes === 0) return '0 B';
@@ -364,7 +416,6 @@
                             try {
                                 const data = JSON.parse(e.data);
                                 if (data.is_final && data.tokens) {
-                                    // 在解析前，先调用后端进行文本处理（如果开关打开）
                                     if(toggles.value.enHot || toggles.value.zhHot || toggles.value.rule) {
                                         data.text = await processTextViaBackend(data.text);
                                     }
@@ -382,7 +433,6 @@
                     const parts = data.text.split(/([，。？！?！,.?!])/).filter(s => s);
                     let tokenIndex = 0;
                     let isNewSentence = true;
-
                     for (let i = 0; i < parts.length; i++) {
                         const part = parts[i];
                         if (!/^[，。？！?！,.?!]$/.test(part)) {
@@ -423,17 +473,53 @@
                 };
                 const syncTime = (i, type) => { if (videoPlayer.value) subtitles.value[i][type] = formatTime(videoPlayer.value.currentTime); };
                 const removeSub = (i) => { if(confirm('删除此行?')) subtitles.value.splice(i, 1); };
-                const seekTo = (t) => { if(!videoPlayer.value) return; const [h,m,s] = t.replace(',','.').split(':'); videoPlayer.value.currentTime = parseFloat(h)*3600 + parseFloat(m)*60 + parseFloat(s); videoPlayer.value.play(); };
+                
+                const seekTo = (t) => { 
+                    if(!videoPlayer.value) return; 
+                    const [h,m,s] = t.replace(',','.').split(':'); 
+                    videoPlayer.value.currentTime = parseFloat(h)*3600 + parseFloat(m)*60 + parseFloat(s); 
+                    videoPlayer.value.play(); 
+                };
+                
                 const autoResize = (e) => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; };
+                
+                const downloadFile = (content, ext) => {
+                    const a = document.createElement('a');
+                    a.href = URL.createObjectURL(new Blob([content], {type: 'text/plain'}));
+                    a.download = (currentFile.value?.name || 'export') + ext;
+                    a.click();
+                };
+
                 const exportSRT = () => {
-                    let c = ''; subtitles.value.forEach((s, i) => c += `${i+1}\n${s.start} --> ${s.end}\n${s.text}\n\n`);
-                    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([c],{type:'text/plain'})); a.download = (currentFile.value?.name||'sub')+'.srt'; a.click();
+                    let c = '';
+                    subtitles.value.forEach((s, i) => {
+                        let text = s.text;
+                        // 仅在导出SRT且开关开启时处理标点
+                        if (exportConfig.value.cleanSrt && exportConfig.value.punctuation) {
+                            try {
+                                const chars = exportConfig.value.punctuation.split('').map(char => '\\' + char).join('|');
+                                const regex = new RegExp(`[${chars}]+$`, 'g');
+                                text = text.replace(regex, '');
+                            } catch (e) { console.error('Regex error', e); }
+                        }
+                        c += `${i+1}\n${s.start} --> ${s.end}\n${text}\n\n`;
+                    });
+                    downloadFile(c, '.srt');
+                };
+
+                const exportTXT = () => {
+                    let c = subtitles.value.map(s => s.text).join('\n');
+                    downloadFile(c, '.txt');
+                };
+
+                const exportJSON = () => {
+                    downloadFile(JSON.stringify(subtitles.value, null, 2), '.json');
                 };
 
                 return { 
-                    config, currentFile, mediaUrl, status, progress, isProcessing, subtitles, errorMsg, videoPlayer, isDragging,
-                    toggles, targetLang, editor,
-                    processAudio, exportSRT, autoResize, handleFileSelect, handleDrop, formatFileSize,
+                    config, currentFile, mediaUrl, mediaDuration, status, progress, isProcessing, subtitles, errorMsg, videoPlayer, isDragging,
+                    toggles, targetLang, editor, exportConfig,
+                    processAudio, exportSRT, exportTXT, exportJSON, autoResize, handleFileSelect, handleDrop, formatFileSize, onMediaLoaded,
                     insertAtCurrent, syncTime, removeSub, seekTo,
                     openEditor, saveFile, translateAll
                 };
