@@ -105,11 +105,11 @@
                                 </span>
                                 <!-- 显示预估耗时范围 -->
                                 <span v-else-if="mediaDuration > 0" class="text-blue-400">
-                                    预计耗时: {{ (mediaDuration / 72).toFixed(1) }}s ~ {{ (mediaDuration / 16).toFixed(1) }}s
+                                    预计耗时: {{ (mediaDuration / 72).toFixed(1) }}s ~ {{ (mediaDuration / 10).toFixed(1) }}s
                                 </span>
                             </div>
                         </div>
-                        <span class="text-blue-400 font-bold ml-4">{{ progress }}%</span>
+                        <span class="text-blue-400 font-bold ml-4">{{ progress }}s</span>
                     </div>
                     <button @click="processAudio" :disabled="!currentFile || isProcessing" class="w-full py-3 rounded-lg font-bold text-white transition-all shadow-lg active:scale-[0.99]" :class="isProcessing ? 'bg-slate-600 cursor-not-allowed' : 'bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400'">
                         {{ isProcessing ? status : '开始转录' }}
@@ -395,6 +395,11 @@
 
                         status.value = '连接服务端...';
                         const ws = new WebSocket(`ws://${config.value.host}:${config.value.port}`);
+
+                        const timerId = setInterval(() => {
+                            const endTime = Date.now();
+                            progress.value = (endTime - startTime) / 1000;
+                        }, 1000);
                         
                         ws.onopen = async () => {
                             status.value = '转录中...';
@@ -417,7 +422,6 @@
                                     data: btoa(float32ToByteString(chunk))
                                 }));
                                 offset = end;
-                                progress.value = Math.min(90, Math.floor((offset / pcmData.length) * 100));
                                 await new Promise(r => setTimeout(r, 10));
                             }
                         };
@@ -430,12 +434,15 @@
                                         data.text = await processTextViaBackend(data.text);
                                     }
                                     parseResult(data);
+
+                                    clearInterval(timerId); 
                                     
                                     // 计算并显示实际耗时
                                     const endTime = Date.now();
                                     processingTime.value = (endTime - startTime) / 1000;
+                                    progress.value = processingTime.value;
                                     
-                                    progress.value = 100; status.value = '完成'; ws.close(); isProcessing.value = false;
+                                    status.value = '完成'; ws.close(); isProcessing.value = false;
                                 }
                             } catch (err) { console.error(err); }
                         };
