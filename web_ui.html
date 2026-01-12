@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CapsWriter Web Client</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <style>
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .time-input { background: transparent; border-bottom: 1px solid #4b5563; text-align: center; width: 5.5rem; font-family: monospace; color: #93c5fd; }
+        .time-input:focus { border-color: #3b82f6; outline: none; }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-200 h-screen overflow-hidden flex flex-col font-sans">
+    
+    <div id="app" class="flex flex-col h-full max-w-[1600px] mx-auto w-full p-4 gap-4">
+        
+        <!-- 头部 -->
+        <header class="flex justify-between items-center bg-slate-800 p-4 rounded-xl shadow-lg border border-slate-700">
+            <h1 class="text-xl font-bold tracking-tight text-white flex items-center gap-2">
+                <span class="text-blue-500">CapsWriter</span> Web
+            </h1>
+            <div class="flex items-center gap-3 bg-slate-900/50 p-1.5 rounded-lg border border-slate-700/50">
+                <input v-model="config.host" class="bg-transparent text-sm px-3 py-1.5 outline-none text-slate-300 w-32 text-center" placeholder="127.0.0.1">
+                <span>:</span>
+                <input v-model="config.port" class="bg-transparent text-sm px-3 py-1.5 outline-none text-slate-300 w-16 text-center" placeholder="6016">
+            </div>
+        </header>
+
+        <div class="flex flex-col lg:flex-row gap-4 h-full overflow-hidden">
+            <!-- 左侧控制区 -->
+            <div class="flex-1 flex flex-col gap-4 min-w-0">
+                <div class="relative bg-black rounded-xl overflow-hidden border border-slate-700 shadow-2xl flex-1 flex flex-col justify-center">
+                    <div v-if="!mediaUrl" class="absolute inset-0 flex flex-col items-center justify-center cursor-pointer hover:bg-white/5 transition-colors" @click="$refs.fileInput.click()">
+                        <p class="text-slate-400 font-medium">点击选择音视频文件</p>
+                    </div>
+                    <video v-else ref="videoPlayer" class="w-full h-full object-contain" controls :src="mediaUrl"></video>
+                    <input type="file" ref="fileInput" class="hidden" accept="video/*,audio/*" @change="handleFileSelect">
+                </div>
+
+                <div class="bg-slate-800 p-5 rounded-xl border border-slate-700">
+                    <div class="flex justify-between items-center mb-4">
+                        <span class="text-white font-semibold truncate">{{ currentFile ? currentFile.name : '未选择文件' }}</span>
+                        <span class="text-blue-400 font-bold">{{ progress }}%</span>
+                    </div>
+                    <button @click="processAudio" :disabled="!currentFile || isProcessing" class="w-full py-3 rounded-lg font-bold text-white transition-all" :class="isProcessing ? 'bg-slate-600' : 'bg-blue-600 hover:bg-blue-500'">
+                        {{ isProcessing ? status : '开始转录' }}
+                    </button>
+                    <div v-if="errorMsg" class="mt-2 text-red-400 text-xs">{{ errorMsg }}</div>
+                </div>
+            </div>
+
+            <!-- 右侧字幕区 -->
+            <div class="lg:w-[500px] flex flex-col bg-slate-800 rounded-xl border border-slate-700 shadow-xl overflow-hidden h-full">
+                <div class="p-4 border-b border-slate-700 flex justify-between items-center bg-slate-800/50">
+                    <h2 class="font-bold text-slate-200">字幕结果</h2>
+                    <button @click="exportSRT" :disabled="!subtitles.length" class="text-xs bg-green-600 hover:bg-green-500 text-white px-3 py-1.5 rounded">导出 SRT</button>
+                </div>
+                <div class="flex-1 overflow-y-auto p-2 space-y-2" ref="subtitleList">
+                    <div v-for="(sub, idx) in subtitles" :key="idx" class="bg-slate-900/50 border border-slate-700/50 rounded-lg p-3">
+                        <div class="flex items-center gap-2 text-xs mb-1.5">
+                            <span class="text-slate-600 w-6 text-right">{{ idx + 1 }}</span>
+                            <input v-model="sub.start" class="time-input">
+                            <span class="text-slate-600">→</span>
+                            <input v-model="sub.end" class="time-input">
+                        </div>
+                        <textarea v-model="sub.text" rows="1" class="w-full bg-transparent text-slate-200 text-sm focus:outline-none resize-none leading-relaxed pl-8" @input="autoResize"></textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref } = Vue;
+
+        createApp({
+            setup() {
+                const config = ref({ host: '127.0.0.1', port: '6016' });
+                const currentFile = ref(null);
+                const mediaUrl = ref('');
+                const status = ref('就绪');
+                const progress = ref(0);
+                const isProcessing = ref(false);
+                const errorMsg = ref('');
+                const subtitles = ref([]);
+                
+                // UUID 生成器
+                const uuidv4 = () => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+                    const r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+                    return v.toString(16);
+                });
+
+                const processAudio = async () => {
+                    if (!currentFile.value) return;
+                    isProcessing.value = true;
+                    errorMsg.value = '';
+                    subtitles.value = [];
+                    progress.value = 0;
+
+                    try {
+                        status.value = '提取音频...';
+                        const fileBuffer = await currentFile.value.arrayBuffer();
+                        const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+                        const audioBuffer = await audioCtx.decodeAudioData(fileBuffer);
+                        
+                        // 转 float32 单声道 (f32le)
+                        const pcmData = audioBuffer.getChannelData(0); 
+                        
+                        status.value = '连接服务端...';
+                        const ws = new WebSocket(`ws://${config.value.host}:${config.value.port}`);
+                        
+                        ws.onopen = async () => {
+                            status.value = '上传数据...';
+                            const taskId = uuidv4();
+                            const sampleRate = 16000;
+                            const chunkSize = sampleRate * 60; // 1秒 = 16000 samples, 每次发 60秒数据 (根据你的Python逻辑)
+                            
+                            // Base64 转换辅助
+                            const float32ToByteString = (float32Arr) => {
+                                const buffer = new ArrayBuffer(float32Arr.length * 4);
+                                const view = new DataView(buffer);
+                                for(let i=0; i<float32Arr.length; i++){
+                                    view.setFloat32(i*4, float32Arr[i], true); // Little Endian
+                                }
+                                return new Uint8Array(buffer).reduce((data, byte) => data + String.fromCharCode(byte), '');
+                            };
+
+                            let offset = 0;
+                            const totalSamples = pcmData.length;
+                            
+                            // 你的 Python 代码逻辑：分段发送 JSON
+                            while (offset < totalSamples) {
+                                if (ws.readyState !== 1) break;
+                                
+                                const end = Math.min(offset + chunkSize, totalSamples);
+                                const chunk = pcmData.slice(offset, end);
+                                const isFinal = end >= totalSamples;
+                                
+                                // 转为 base64
+                                const binaryString = float32ToByteString(chunk);
+                                const base64Data = btoa(binaryString);
+
+                                const message = {
+                                    task_id: taskId,
+                                    seg_duration: chunkSize / sampleRate,
+                                    seg_overlap: 2, // 默认重叠
+                                    is_final: isFinal,
+                                    time_start: Date.now() / 1000,
+                                    time_frame: Date.now() / 1000,
+                                    source: 'file',
+                                    data: base64Data
+                                };
+
+                                ws.send(JSON.stringify(message));
+                                offset = end;
+                                progress.value = Math.min(90, Math.floor((offset / totalSamples) * 100));
+                                await new Promise(r => setTimeout(r, 10));
+                            }
+                        };
+
+                        ws.onmessage = (e) => {
+                            try {
+                                const data = JSON.parse(e.data);
+                                console.log('Msg:', data); // 打印日志方便调试
+
+                                if (data.is_final && data.tokens && data.timestamps) {
+                                    parseResult(data);
+                                    progress.value = 100;
+                                    status.value = '完成';
+                                    ws.close();
+                                    isProcessing.value = false;
+                                }
+                            } catch (err) { console.error(err); }
+                        };
+
+                        ws.onerror = () => { isProcessing.value = false; errorMsg.value = '连接失败'; };
+
+                    } catch (err) {
+                        console.error(err);
+                        errorMsg.value = err.message;
+                        isProcessing.value = false;
+                    }
+                };
+
+                // === 核心修复：解析一维时间戳数组 ===
+                const parseResult = (data) => {
+                    // data.tokens: ["好", "的", ...] (无标点)
+                    // data.timestamps: [1.93, 2.33, ...] (每个字的时间点)
+                    // data.text: "好的...。" (有标点)
+                    
+                    const newSubs = [];
+                    const fullText = data.text;
+                    const tokens = data.tokens;
+                    const timestamps = data.timestamps;
+                    
+                    // 正则拆分句子，保留标点 (中文标点 + 英文标点)
+                    // split 结果形如: ["好的设备攻击者", "，", "攻击防御", "。", ...]
+                    const parts = fullText.split(/([，。？！?！,.?!])/).filter(s => s);
+                    
+                    let tokenIndex = 0; // 追踪 tokens 数组的进度
+
+                    // 遍历拆分后的片段，重新组装句子
+                    let currentSentence = "";
+                    let isNewSentence = true;
+
+                    for (let i = 0; i < parts.length; i++) {
+                        const part = parts[i];
+                        
+                        // 判断这一段是不是标点符号
+                        const isPunctuation = /^[，。？！?！,.?!]$/.test(part);
+
+                        if (!isPunctuation) {
+                            // 这是一段文字，例如 "好的设备攻击者"
+                            // 我们需要计算这段文字消耗了多少个 token
+                            // 简单起见，假设 token 和字符是一一对应的 (CapsWriter通常如此，中文一字一token)
+                            // 如果有英文单词，可能需要更复杂的对齐，但这里先按字符长度算
+                            // 修正：CapsWriter 的 tokens 列表里是字符，所以长度直接对应
+                            
+                            // 找到这一句的开始时间和结束时间
+                            // 如果是新句子的开始，记录开始时间
+                            let segmentLen = 0;
+                            // 统计这一段文本在 tokens 里对应多长 (跳过空格等非 token 字符)
+                            // 这里做一个简化假设：part 的长度等于它消耗的 tokens 数量
+                            segmentLen = part.length;
+
+                            if (tokenIndex + segmentLen <= timestamps.length) {
+                                // 当前片段的结束时间 = 最后一个字的 timestamps
+                                const startTime = tokenIndex > 0 ? timestamps[tokenIndex - 1] : 0;
+                                const endTime = timestamps[tokenIndex + segmentLen - 1];
+                                
+                                // 将其加入临时句子
+                                if (isNewSentence) {
+                                    // 新建字幕行
+                                    newSubs.push({
+                                        start: formatTime(startTime),
+                                        end: formatTime(endTime),
+                                        text: part
+                                    });
+                                    currentSentence = part; // 记录引用
+                                    isNewSentence = false;
+                                } else {
+                                    // 追加到上一行 (通常标点会把句子切开，所以这里很少走到)
+                                    const lastSub = newSubs[newSubs.length - 1];
+                                    lastSub.end = formatTime(endTime);
+                                    lastSub.text += part;
+                                }
+                                tokenIndex += segmentLen;
+                            }
+                        } else {
+                            // 这是一个标点符号
+                            if (newSubs.length > 0) {
+                                newSubs[newSubs.length - 1].text += part;
+                                isNewSentence = true; // 标点之后视作新句子开始
+                            }
+                        }
+                    }
+                    subtitles.value = newSubs;
+                };
+
+                const formatTime = (seconds) => {
+                    const date = new Date(0);
+                    date.setMilliseconds(seconds * 1000);
+                    return date.toISOString().substr(11, 12).replace('.', ',');
+                };
+
+                const autoResize = (e) => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; };
+                const handleFileSelect = (e) => { 
+                    const file = e.target.files[0];
+                    if (file) { currentFile.value = file; mediaUrl.value = URL.createObjectURL(file); subtitles.value = []; }
+                };
+                const exportSRT = () => {
+                    let c = ''; subtitles.value.forEach((s, i) => c += `${i+1}\n${s.start} --> ${s.end}\n${s.text}\n\n`);
+                    const b = new Blob([c], {type:'text/plain'});
+                    const u = URL.createObjectURL(b);
+                    const a = document.createElement('a'); a.href=u; a.download=(currentFile.value?.name||'sub')+'.srt'; a.click();
+                };
+
+                return { config, currentFile, mediaUrl, status, progress, isProcessing, subtitles, errorMsg, processAudio, exportSRT, autoResize, handleFileSelect };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
