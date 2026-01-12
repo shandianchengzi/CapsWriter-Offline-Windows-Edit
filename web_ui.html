@@ -7,9 +7,19 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <style>
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        .time-input { background: transparent; border-bottom: 1px solid #4b5563; text-align: center; width: 5.5rem; font-family: monospace; color: #93c5fd; }
-        .time-input:focus { border-color: #3b82f6; outline: none; }
+        /* 自定义滚动条 */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+        
+        .time-input { background: transparent; border-bottom: 1px solid #4b5563; text-align: center; width: 5.5rem; font-family: monospace; color: #93c5fd; font-size: 0.875rem; transition: all 0.2s; }
+        .time-input:focus { border-color: #3b82f6; outline: none; color: #fff; }
+        
+        /* 拖拽覆盖层动画 */
+        .drag-overlay { pointer-events: none; opacity: 0; transition: opacity 0.2s; }
+        .drag-active .drag-overlay { opacity: 1; }
+        .drag-active { border-color: #3b82f6 !important; background-color: rgba(30, 41, 59, 0.8) !important; }
     </style>
 </head>
 <body class="bg-slate-900 text-slate-200 h-screen overflow-hidden flex flex-col font-sans">
@@ -17,7 +27,7 @@
     <div id="app" class="flex flex-col h-full max-w-[1600px] mx-auto w-full p-4 gap-4">
         
         <!-- 头部 -->
-        <header class="flex justify-between items-center bg-slate-800 p-4 rounded-xl shadow-lg border border-slate-700">
+        <header class="flex justify-between items-center bg-slate-800 p-4 rounded-xl shadow-lg border border-slate-700 shrink-0">
             <h1 class="text-xl font-bold tracking-tight text-white flex items-center gap-2">
                 <span class="text-blue-500">CapsWriter</span> Web
             </h1>
@@ -28,52 +38,130 @@
             </div>
         </header>
 
-        <div class="flex flex-col lg:flex-row gap-4 h-full overflow-hidden">
+        <div class="flex flex-col lg:flex-row gap-4 h-full overflow-hidden min-h-0">
             <!-- 左侧控制区 -->
-            <div class="flex-1 flex flex-col gap-4 min-w-0">
-                <div class="relative bg-black rounded-xl overflow-hidden border border-slate-700 shadow-2xl flex-1 flex flex-col justify-center">
-                    <div v-if="!mediaUrl" class="absolute inset-0 flex flex-col items-center justify-center cursor-pointer hover:bg-white/5 transition-colors" @click="$refs.fileInput.click()">
-                        <p class="text-slate-400 font-medium">点击选择音视频文件</p>
+            <div class="flex-1 flex flex-col gap-4 min-w-0 h-full">
+                <!-- 视频/拖拽区域 -->
+                <div 
+                    class="relative bg-black rounded-xl overflow-hidden border border-slate-700 shadow-2xl flex-1 flex flex-col justify-center transition-colors duration-200 group"
+                    :class="{ 'drag-active': isDragging }"
+                    @dragover.prevent="isDragging = true"
+                    @dragleave.prevent="isDragging = false"
+                    @drop.prevent="handleDrop"
+                >
+                    <!-- 拖拽提示层 -->
+                    <div class="drag-overlay absolute inset-0 bg-blue-500/20 backdrop-blur-sm z-50 flex flex-col items-center justify-center border-4 border-blue-500 border-dashed rounded-xl m-1">
+                        <p class="text-white text-2xl font-bold drop-shadow-md">释放文件以加载</p>
                     </div>
-                    <video v-else ref="videoPlayer" class="w-full h-full object-contain" controls :src="mediaUrl"></video>
+
+                    <div v-if="!mediaUrl" class="absolute inset-0 flex flex-col items-center justify-center cursor-pointer hover:bg-white/5 transition-colors z-10" @click="$refs.fileInput.click()">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-16 h-16 text-slate-500 mb-3 group-hover:text-blue-400 transition-colors">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                        </svg>
+                        <p class="text-slate-400 font-medium group-hover:text-slate-200">点击或拖拽选择音视频文件</p>
+                    </div>
+                    
+                    <video v-else ref="videoPlayer" class="w-full h-full object-contain z-20" controls :src="mediaUrl"></video>
                     <input type="file" ref="fileInput" class="hidden" accept="video/*,audio/*" @change="handleFileSelect">
                 </div>
 
-                <div class="bg-slate-800 p-5 rounded-xl border border-slate-700">
+                <!-- 底部控制条 -->
+                <div class="bg-slate-800 p-5 rounded-xl border border-slate-700 shrink-0">
                     <div class="flex justify-between items-center mb-4">
-                        <span class="text-white font-semibold truncate">{{ currentFile ? currentFile.name : '未选择文件' }}</span>
-                        <span class="text-blue-400 font-bold">{{ progress }}%</span>
+                        <div class="flex flex-col min-w-0">
+                            <span class="text-white font-semibold truncate">{{ currentFile ? currentFile.name : '未选择文件' }}</span>
+                            <span class="text-xs text-slate-500" v-if="currentFile">{{ formatFileSize(currentFile.size) }}</span>
+                        </div>
+                        <span class="text-blue-400 font-bold ml-4">{{ progress }}%</span>
                     </div>
-                    <button @click="processAudio" :disabled="!currentFile || isProcessing" class="w-full py-3 rounded-lg font-bold text-white transition-all" :class="isProcessing ? 'bg-slate-600' : 'bg-blue-600 hover:bg-blue-500'">
-                        {{ isProcessing ? status : '开始转录' }}
+                    <button @click="processAudio" :disabled="!currentFile || isProcessing" class="w-full py-3 rounded-lg font-bold text-white transition-all shadow-lg active:scale-[0.99]" :class="isProcessing ? 'bg-slate-600 cursor-not-allowed' : 'bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400'">
+                        <span v-if="isProcessing" class="flex items-center justify-center gap-2">
+                            <svg class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            {{ status }}
+                        </span>
+                        <span v-else>开始转录</span>
                     </button>
-                    <div v-if="errorMsg" class="mt-2 text-red-400 text-xs">{{ errorMsg }}</div>
+                    <div v-if="errorMsg" class="mt-3 text-red-400 text-xs bg-red-900/20 p-2 rounded border border-red-900/50 flex items-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4">
+                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
+                        </svg>
+                        {{ errorMsg }}
+                    </div>
                 </div>
             </div>
 
             <!-- 右侧字幕区 -->
             <div class="lg:w-[500px] flex flex-col bg-slate-800 rounded-xl border border-slate-700 shadow-xl overflow-hidden h-full">
-                <div class="p-4 border-b border-slate-700 flex justify-between items-center bg-slate-800/50">
-                    <h2 class="font-bold text-slate-200">字幕结果</h2>
-                    <button @click="exportSRT" :disabled="!subtitles.length" class="text-xs bg-green-600 hover:bg-green-500 text-white px-3 py-1.5 rounded">导出 SRT</button>
-                </div>
-                <div class="flex-1 overflow-y-auto p-2 space-y-2" ref="subtitleList">
-                    <div v-for="(sub, idx) in subtitles" :key="idx" class="bg-slate-900/50 border border-slate-700/50 rounded-lg p-3">
-                        <div class="flex items-center gap-2 text-xs mb-1.5">
-                            <span class="text-slate-600 w-6 text-right">{{ idx + 1 }}</span>
-                            <input v-model="sub.start" class="time-input">
-                            <span class="text-slate-600">→</span>
-                            <input v-model="sub.end" class="time-input">
-                        </div>
-                        <textarea v-model="sub.text" rows="1" class="w-full bg-transparent text-slate-200 text-sm focus:outline-none resize-none leading-relaxed pl-8" @input="autoResize"></textarea>
+                <!-- 工具栏 -->
+                <div class="p-3 border-b border-slate-700 flex justify-between items-center bg-slate-800/95 backdrop-blur z-10">
+                    <div class="flex items-center gap-3">
+                        <h2 class="font-bold text-slate-200">字幕结果</h2>
+                        <span class="text-xs text-slate-500 bg-slate-900 px-2 py-0.5 rounded-full">{{ subtitles.length }} 行</span>
                     </div>
+                    <div class="flex gap-2">
+                         <button @click="insertAtCurrent" :disabled="!mediaUrl" class="flex items-center gap-1 text-xs bg-blue-600/20 hover:bg-blue-600 hover:text-white text-blue-400 border border-blue-600/30 px-3 py-1.5 rounded transition-all" title="在当前播放位置插入字幕">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3.5 h-3.5"><path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" /></svg>
+                            插入
+                        </button>
+                        <button @click="exportSRT" :disabled="!subtitles.length" class="flex items-center gap-1 text-xs bg-green-600/20 hover:bg-green-600 hover:text-white text-green-400 border border-green-600/30 px-3 py-1.5 rounded transition-all">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3.5 h-3.5"><path fill-rule="evenodd" d="M4.5 2A1.5 1.5 0 003 3.5v13A1.5 1.5 0 004.5 18h11a1.5 1.5 0 001.5-1.5V7.621a1.5 1.5 0 00-.44-1.06l-4.12-4.122A1.5 1.5 0 0011.378 2H4.5zm2.25 8.5a.75.75 0 000 1.5h6.5a.75.75 0 000-1.5h-6.5zm0 3a.75.75 0 000 1.5h6.5a.75.75 0 000-1.5h-6.5z" clip-rule="evenodd" /></svg>
+                            导出
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- 列表 -->
+                <div class="flex-1 overflow-y-auto p-2 space-y-2 relative" ref="subtitleList">
+                    <div v-if="subtitles.length === 0" class="h-full flex flex-col items-center justify-center text-slate-500 opacity-50">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-12 h-12 mb-2"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 9h16.5m-16.5 6.75h16.5" /></svg>
+                        <p class="text-sm">暂无字幕数据</p>
+                    </div>
+
+                    <div v-for="(sub, idx) in subtitles" :key="idx" class="group bg-slate-900/40 hover:bg-slate-900/80 border border-slate-700/50 hover:border-slate-600 rounded-lg p-3 transition-all duration-200">
+                        <div class="flex items-center gap-2 mb-2">
+                            <!-- 序号 (点击跳转) -->
+                            <span @click="seekTo(sub.start)" class="text-slate-500 w-6 text-right text-xs cursor-pointer hover:text-blue-400 font-mono select-none" title="跳转播放">{{ idx + 1 }}</span>
+                            
+                            <!-- 开始时间 -->
+                            <div class="relative flex items-center">
+                                <input v-model="sub.start" class="time-input" title="开始时间">
+                                <button @click="syncTime(idx, 'start')" class="ml-1 text-slate-600 hover:text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity" title="应用当前播放时间">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3.5 h-3.5"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-13a.75.75 0 00-1.5 0v5c0 .414.336.75.75.75h4a.75.75 0 000-1.5h-3.25V5z" clip-rule="evenodd" /></svg>
+                                </button>
+                            </div>
+
+                            <span class="text-slate-600 text-xs">→</span>
+                            
+                            <!-- 结束时间 -->
+                            <div class="relative flex items-center">
+                                <input v-model="sub.end" class="time-input" title="结束时间">
+                                <button @click="syncTime(idx, 'end')" class="ml-1 text-slate-600 hover:text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity" title="应用当前播放时间">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3.5 h-3.5"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-13a.75.75 0 00-1.5 0v5c0 .414.336.75.75.75h4a.75.75 0 000-1.5h-3.25V5z" clip-rule="evenodd" /></svg>
+                                </button>
+                            </div>
+
+                            <div class="flex-1"></div>
+
+                            <!-- 删除按钮 -->
+                            <button @click="removeSub(idx)" class="text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-slate-800" title="删除此行">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4"><path fill-rule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.52.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5zM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4zM8.58 7.72a.75.75 0 00-1.5.06l.3 7.5a.75.75 0 101.5-.06l-.3-7.5zm4.34.06a.75.75 0 10-1.5-.06l-.3 7.5a.75.75 0 101.5.06l.3-7.5z" clip-rule="evenodd" /></svg>
+                            </button>
+                        </div>
+                        <textarea v-model="sub.text" rows="1" class="w-full bg-transparent text-slate-200 text-sm focus:outline-none resize-none leading-relaxed pl-8 border-l-2 border-transparent focus:border-blue-500/50 transition-colors" placeholder="输入字幕内容..." @input="autoResize"></textarea>
+                    </div>
+                    
+                    <!-- 底部占位，防止最后一行被遮挡 -->
+                    <div class="h-10"></div>
                 </div>
             </div>
         </div>
     </div>
 
     <script>
-        const { createApp, ref } = Vue;
+        const { createApp, ref, nextTick } = Vue;
 
         createApp({
             setup() {
@@ -85,6 +173,8 @@
                 const isProcessing = ref(false);
                 const errorMsg = ref('');
                 const subtitles = ref([]);
+                const videoPlayer = ref(null);
+                const isDragging = ref(false); // 拖拽状态
                 
                 // UUID 生成器
                 const uuidv4 = () => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
@@ -92,6 +182,38 @@
                     return v.toString(16);
                 });
 
+                // 核心业务：处理文件上传
+                const handleFileSelect = (e) => { 
+                    processFile(e.target.files[0]);
+                };
+
+                // 核心业务：处理拖拽
+                const handleDrop = (e) => {
+                    isDragging.value = false;
+                    const file = e.dataTransfer.files[0];
+                    if (file) processFile(file);
+                };
+
+                const processFile = (file) => {
+                    if (file) { 
+                        currentFile.value = file; 
+                        mediaUrl.value = URL.createObjectURL(file); 
+                        subtitles.value = [];
+                        errorMsg.value = '';
+                        progress.value = 0;
+                        status.value = '就绪';
+                    }
+                }
+
+                const formatFileSize = (bytes) => {
+                    if (bytes === 0) return '0 B';
+                    const k = 1024;
+                    const sizes = ['B', 'KB', 'MB', 'GB'];
+                    const i = Math.floor(Math.log(bytes) / Math.log(k));
+                    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+                };
+
+                // 核心业务：音频处理流程（保持不变）
                 const processAudio = async () => {
                     if (!currentFile.value) return;
                     isProcessing.value = true;
@@ -105,7 +227,6 @@
                         const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
                         const audioBuffer = await audioCtx.decodeAudioData(fileBuffer);
                         
-                        // 转 float32 单声道 (f32le)
                         const pcmData = audioBuffer.getChannelData(0); 
                         
                         status.value = '连接服务端...';
@@ -115,14 +236,13 @@
                             status.value = '上传数据...';
                             const taskId = uuidv4();
                             const sampleRate = 16000;
-                            const chunkSize = sampleRate * 60; // 1秒 = 16000 samples, 每次发 60秒数据 (根据你的Python逻辑)
+                            const chunkSize = sampleRate * 60; 
                             
-                            // Base64 转换辅助
                             const float32ToByteString = (float32Arr) => {
                                 const buffer = new ArrayBuffer(float32Arr.length * 4);
                                 const view = new DataView(buffer);
                                 for(let i=0; i<float32Arr.length; i++){
-                                    view.setFloat32(i*4, float32Arr[i], true); // Little Endian
+                                    view.setFloat32(i*4, float32Arr[i], true); 
                                 }
                                 return new Uint8Array(buffer).reduce((data, byte) => data + String.fromCharCode(byte), '');
                             };
@@ -130,7 +250,6 @@
                             let offset = 0;
                             const totalSamples = pcmData.length;
                             
-                            // 你的 Python 代码逻辑：分段发送 JSON
                             while (offset < totalSamples) {
                                 if (ws.readyState !== 1) break;
                                 
@@ -138,14 +257,13 @@
                                 const chunk = pcmData.slice(offset, end);
                                 const isFinal = end >= totalSamples;
                                 
-                                // 转为 base64
                                 const binaryString = float32ToByteString(chunk);
                                 const base64Data = btoa(binaryString);
 
                                 const message = {
                                     task_id: taskId,
                                     seg_duration: chunkSize / sampleRate,
-                                    seg_overlap: 2, // 默认重叠
+                                    seg_overlap: 2, 
                                     is_final: isFinal,
                                     time_start: Date.now() / 1000,
                                     time_frame: Date.now() / 1000,
@@ -163,7 +281,7 @@
                         ws.onmessage = (e) => {
                             try {
                                 const data = JSON.parse(e.data);
-                                console.log('Msg:', data); // 打印日志方便调试
+                                console.log('Msg:', data);
 
                                 if (data.is_final && data.tokens && data.timestamps) {
                                     parseResult(data);
@@ -184,64 +302,36 @@
                     }
                 };
 
-                // === 核心修复：解析一维时间戳数组 ===
+                // 解析逻辑（保持不变）
                 const parseResult = (data) => {
-                    // data.tokens: ["好", "的", ...] (无标点)
-                    // data.timestamps: [1.93, 2.33, ...] (每个字的时间点)
-                    // data.text: "好的...。" (有标点)
-                    
                     const newSubs = [];
                     const fullText = data.text;
                     const tokens = data.tokens;
                     const timestamps = data.timestamps;
-                    
-                    // 正则拆分句子，保留标点 (中文标点 + 英文标点)
-                    // split 结果形如: ["好的设备攻击者", "，", "攻击防御", "。", ...]
                     const parts = fullText.split(/([，。？！?！,.?!])/).filter(s => s);
-                    
-                    let tokenIndex = 0; // 追踪 tokens 数组的进度
-
-                    // 遍历拆分后的片段，重新组装句子
+                    let tokenIndex = 0; 
                     let currentSentence = "";
                     let isNewSentence = true;
 
                     for (let i = 0; i < parts.length; i++) {
                         const part = parts[i];
-                        
-                        // 判断这一段是不是标点符号
                         const isPunctuation = /^[，。？！?！,.?!]$/.test(part);
 
                         if (!isPunctuation) {
-                            // 这是一段文字，例如 "好的设备攻击者"
-                            // 我们需要计算这段文字消耗了多少个 token
-                            // 简单起见，假设 token 和字符是一一对应的 (CapsWriter通常如此，中文一字一token)
-                            // 如果有英文单词，可能需要更复杂的对齐，但这里先按字符长度算
-                            // 修正：CapsWriter 的 tokens 列表里是字符，所以长度直接对应
-                            
-                            // 找到这一句的开始时间和结束时间
-                            // 如果是新句子的开始，记录开始时间
-                            let segmentLen = 0;
-                            // 统计这一段文本在 tokens 里对应多长 (跳过空格等非 token 字符)
-                            // 这里做一个简化假设：part 的长度等于它消耗的 tokens 数量
-                            segmentLen = part.length;
-
+                            let segmentLen = part.length;
                             if (tokenIndex + segmentLen <= timestamps.length) {
-                                // 当前片段的结束时间 = 最后一个字的 timestamps
                                 const startTime = tokenIndex > 0 ? timestamps[tokenIndex - 1] : 0;
                                 const endTime = timestamps[tokenIndex + segmentLen - 1];
                                 
-                                // 将其加入临时句子
                                 if (isNewSentence) {
-                                    // 新建字幕行
                                     newSubs.push({
                                         start: formatTime(startTime),
                                         end: formatTime(endTime),
                                         text: part
                                     });
-                                    currentSentence = part; // 记录引用
+                                    currentSentence = part; 
                                     isNewSentence = false;
                                 } else {
-                                    // 追加到上一行 (通常标点会把句子切开，所以这里很少走到)
                                     const lastSub = newSubs[newSubs.length - 1];
                                     lastSub.end = formatTime(endTime);
                                     lastSub.text += part;
@@ -249,27 +339,77 @@
                                 tokenIndex += segmentLen;
                             }
                         } else {
-                            // 这是一个标点符号
                             if (newSubs.length > 0) {
                                 newSubs[newSubs.length - 1].text += part;
-                                isNewSentence = true; // 标点之后视作新句子开始
+                                isNewSentence = true; 
                             }
                         }
                     }
                     subtitles.value = newSubs;
+                    nextTick(() => {
+                        document.querySelectorAll('textarea').forEach(el => autoResize({target: el}));
+                    });
                 };
 
+                // 工具函数：格式化时间 (秒 -> 00:00:00,000)
                 const formatTime = (seconds) => {
+                    if (isNaN(seconds)) return "00:00:00,000";
                     const date = new Date(0);
                     date.setMilliseconds(seconds * 1000);
                     return date.toISOString().substr(11, 12).replace('.', ',');
                 };
 
-                const autoResize = (e) => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; };
-                const handleFileSelect = (e) => { 
-                    const file = e.target.files[0];
-                    if (file) { currentFile.value = file; mediaUrl.value = URL.createObjectURL(file); subtitles.value = []; }
+                // 新增功能：根据播放进度新增条目
+                const insertAtCurrent = () => {
+                    if (!videoPlayer.value) return;
+                    const currentTime = videoPlayer.value.currentTime;
+                    const formattedTime = formatTime(currentTime);
+                    
+                    // 查找插入位置（保持时间顺序）
+                    // 简单的逻辑：追加到末尾，用户如果想排序可以手动改，或者复杂一点找到插入点
+                    // 为了简单和直观，我们这里直接追加到末尾，或者如果需要可以做二分查找插入
+                    subtitles.value.push({
+                        start: formattedTime,
+                        end: formattedTime, // 默认0时长，方便用户立刻修改
+                        text: ''
+                    });
+                    
+                    // 自动滚动到底部并聚焦
+                    nextTick(() => {
+                        const list = document.querySelector('.overflow-y-auto');
+                        list.scrollTop = list.scrollHeight;
+                        const inputs = document.querySelectorAll('textarea');
+                        if (inputs.length) inputs[inputs.length - 1].focus();
+                    });
                 };
+
+                // 新增功能：同步时间
+                const syncTime = (index, type) => {
+                    if (!videoPlayer.value) return;
+                    subtitles.value[index][type] = formatTime(videoPlayer.value.currentTime);
+                };
+
+                // 新增功能：删除条目
+                const removeSub = (index) => {
+                    if(confirm('确定删除这一行吗？')) {
+                        subtitles.value.splice(index, 1);
+                    }
+                };
+                
+                // 新增功能：跳转播放
+                const seekTo = (timeStr) => {
+                    if(!videoPlayer.value) return;
+                    // 解析 "00:00:01,230" -> 秒
+                    const [h, m, s] = timeStr.replace(',', '.').split(':');
+                    const seconds = parseFloat(h) * 3600 + parseFloat(m) * 60 + parseFloat(s);
+                    if (!isNaN(seconds)) {
+                        videoPlayer.value.currentTime = seconds;
+                        videoPlayer.value.play();
+                    }
+                };
+
+                const autoResize = (e) => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; };
+                
                 const exportSRT = () => {
                     let c = ''; subtitles.value.forEach((s, i) => c += `${i+1}\n${s.start} --> ${s.end}\n${s.text}\n\n`);
                     const b = new Blob([c], {type:'text/plain'});
@@ -277,7 +417,11 @@
                     const a = document.createElement('a'); a.href=u; a.download=(currentFile.value?.name||'sub')+'.srt'; a.click();
                 };
 
-                return { config, currentFile, mediaUrl, status, progress, isProcessing, subtitles, errorMsg, processAudio, exportSRT, autoResize, handleFileSelect };
+                return { 
+                    config, currentFile, mediaUrl, status, progress, isProcessing, subtitles, errorMsg, videoPlayer, isDragging,
+                    processAudio, exportSRT, autoResize, handleFileSelect, handleDrop, formatFileSize,
+                    insertAtCurrent, syncTime, removeSub, seekTo
+                };
             }
         }).mount('#app');
     </script>
