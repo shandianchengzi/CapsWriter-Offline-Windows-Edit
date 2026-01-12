@@ -500,7 +500,7 @@
                     if(!videoPlayer.value) return; 
                     const [h,m,s] = t.replace(',','.').split(':'); 
                     videoPlayer.value.currentTime = parseFloat(h)*3600 + parseFloat(m)*60 + parseFloat(s); 
-                    videoPlayer.value.play(); 
+                    videoPlayer.value.pause();
                 };
                 
                 const autoResize = (e) => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; };
