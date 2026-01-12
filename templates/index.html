@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CapsWriter Web Client (Flask)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <style>
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+        .time-input { background: transparent; border-bottom: 1px solid #4b5563; text-align: center; width: 5.5rem; font-family: monospace; color: #93c5fd; font-size: 0.875rem; transition: all 0.2s; }
+        .time-input:focus { border-color: #3b82f6; outline: none; color: #fff; }
+        .drag-overlay { pointer-events: none; opacity: 0; transition: opacity 0.2s; }
+        .drag-active .drag-overlay { opacity: 1; }
+        .drag-active { border-color: #3b82f6 !important; background-color: rgba(30, 41, 59, 0.8) !important; }
+        
+        /* 开关样式 */
+        .toggle-checkbox:checked { right: 0; border-color: #3b82f6; }
+        .toggle-checkbox:checked + .toggle-label { background-color: #3b82f6; }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-200 h-screen overflow-hidden flex flex-col font-sans">
+    
+    <!-- 添加 raw 标签，告诉 Flask/Jinja2 忽略此区域的解析，直接原样输出给 Vue -->
+    {% raw %}
+    <div id="app" class="flex flex-col h-full max-w-[1600px] mx-auto w-full p-4 gap-4">
+        
+        <!-- 头部 -->
+        <header class="flex justify-between items-center bg-slate-800 p-4 rounded-xl shadow-lg border border-slate-700 shrink-0">
+            <h1 class="text-xl font-bold tracking-tight text-white flex items-center gap-2">
+                <span class="text-blue-500">CapsWriter</span> Flask
+            </h1>
+            <div class="flex items-center gap-4">
+                <!-- 替换处理开关组 -->
+                <div class="flex items-center gap-4 bg-slate-900/50 p-2 rounded-lg border border-slate-700/50">
+                    <span class="text-xs text-slate-400 font-bold px-1">处理开关:</span>
+                    <label class="flex items-center cursor-pointer gap-2" title="英文热词替换">
+                        <span class="text-xs text-slate-300">En热词</span>
+                        <div class="relative inline-block w-8 h-4 align-middle select-none transition duration-200 ease-in">
+                            <input type="checkbox" v-model="toggles.enHot" class="toggle-checkbox absolute block w-4 h-4 rounded-full bg-white border-4 appearance-none cursor-pointer transition-all duration-300 left-0 checked:left-4 top-0"/>
+                            <div class="toggle-label block overflow-hidden h-4 rounded-full bg-slate-700 cursor-pointer"></div>
+                        </div>
+                    </label>
+                    <label class="flex items-center cursor-pointer gap-2" title="中文热词替换">
+                        <span class="text-xs text-slate-300">Zh热词</span>
+                        <div class="relative inline-block w-8 h-4 align-middle select-none transition duration-200 ease-in">
+                            <input type="checkbox" v-model="toggles.zhHot" class="toggle-checkbox absolute block w-4 h-4 rounded-full bg-white border-4 appearance-none cursor-pointer transition-all duration-300 left-0 checked:left-4 top-0"/>
+                            <div class="toggle-label block overflow-hidden h-4 rounded-full bg-slate-700 cursor-pointer"></div>
+                        </div>
+                    </label>
+                    <label class="flex items-center cursor-pointer gap-2" title="规则替换">
+                        <span class="text-xs text-slate-300">规则</span>
+                        <div class="relative inline-block w-8 h-4 align-middle select-none transition duration-200 ease-in">
+                            <input type="checkbox" v-model="toggles.rule" class="toggle-checkbox absolute block w-4 h-4 rounded-full bg-white border-4 appearance-none cursor-pointer transition-all duration-300 left-0 checked:left-4 top-0"/>
+                            <div class="toggle-label block overflow-hidden h-4 rounded-full bg-slate-700 cursor-pointer"></div>
+                        </div>
+                    </label>
+                </div>
+
+                <!-- 端口配置 -->
+                <div class="flex items-center gap-3 bg-slate-900/50 p-1.5 rounded-lg border border-slate-700/50">
+                    <input v-model="config.host" class="bg-transparent text-sm px-3 py-1.5 outline-none text-slate-300 w-32 text-center" placeholder="127.0.0.1">
+                    <span>:</span>
+                    <input v-model="config.port" class="bg-transparent text-sm px-3 py-1.5 outline-none text-slate-300 w-16 text-center" placeholder="6016">
+                </div>
+            </div>
+        </header>
+
+        <div class="flex flex-col lg:flex-row gap-4 h-full overflow-hidden min-h-0">
+            <!-- 左侧控制区 -->
+            <div class="flex-1 flex flex-col gap-4 min-w-0 h-full">
+                <!-- 视频区域 -->
+                <div 
+                    class="relative bg-black rounded-xl overflow-hidden border border-slate-700 shadow-2xl flex-1 flex flex-col justify-center transition-colors duration-200 group"
+                    :class="{ 'drag-active': isDragging }"
+                    @dragover.prevent="isDragging = true"
+                    @dragleave.prevent="isDragging = false"
+                    @drop.prevent="handleDrop"
+                >
+                    <div class="drag-overlay absolute inset-0 bg-blue-500/20 backdrop-blur-sm z-50 flex flex-col items-center justify-center border-4 border-blue-500 border-dashed rounded-xl m-1">
+                        <p class="text-white text-2xl font-bold drop-shadow-md">释放文件以加载</p>
+                    </div>
+
+                    <div v-if="!mediaUrl" class="absolute inset-0 flex flex-col items-center justify-center cursor-pointer hover:bg-white/5 transition-colors z-10" @click="$refs.fileInput.click()">
+                        <p class="text-slate-400 font-medium group-hover:text-slate-200">点击或拖拽选择音视频文件</p>
+                    </div>
+                    
+                    <video v-else ref="videoPlayer" class="w-full h-full object-contain z-20" controls :src="mediaUrl"></video>
+                    <input type="file" ref="fileInput" class="hidden" accept="video/*,audio/*" @change="handleFileSelect">
+                </div>
+
+                <!-- 底部控制条 -->
+                <div class="bg-slate-800 p-5 rounded-xl border border-slate-700 shrink-0">
+                    <div class="flex justify-between items-center mb-4">
+                        <div class="flex flex-col min-w-0">
+                            <!-- Jinja 会忽略这里的 {{ }}，交给 Vue 处理 -->
+                            <span class="text-white font-semibold truncate">{{ currentFile ? currentFile.name : '未选择文件' }}</span>
+                            <span class="text-xs text-slate-500" v-if="currentFile">{{ formatFileSize(currentFile.size) }}</span>
+                        </div>
+                        <span class="text-blue-400 font-bold ml-4">{{ progress }}%</span>
+                    </div>
+                    <button @click="processAudio" :disabled="!currentFile || isProcessing" class="w-full py-3 rounded-lg font-bold text-white transition-all shadow-lg active:scale-[0.99]" :class="isProcessing ? 'bg-slate-600 cursor-not-allowed' : 'bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400'">
+                        {{ isProcessing ? status : '开始转录' }}
+                    </button>
+                    <div v-if="errorMsg" class="mt-3 text-red-400 text-xs bg-red-900/20 p-2 rounded border border-red-900/50">{{ errorMsg }}</div>
+                </div>
+            </div>
+
+            <!-- 右侧字幕区 -->
+            <div class="lg:w-[550px] flex flex-col bg-slate-800 rounded-xl border border-slate-700 shadow-xl overflow-hidden h-full">
+                
+                <!-- 工具栏 1: 翻译与文件编辑 -->
+                <div class="p-3 border-b border-slate-700 bg-slate-800/95 backdrop-blur z-20 flex flex-col gap-3">
+                    <div class="flex justify-between items-center">
+                        <div class="flex gap-2">
+                             <!-- 文件编辑按钮 -->
+                             <button @click="openEditor('hot-en.txt')" class="text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 px-2 py-1 rounded border border-slate-600">En热词</button>
+                             <button @click="openEditor('hot-zh.txt')" class="text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 px-2 py-1 rounded border border-slate-600">Zh热词</button>
+                             <button @click="openEditor('hot-rule.txt')" class="text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 px-2 py-1 rounded border border-slate-600">规则</button>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <select v-model="targetLang" class="bg-slate-900 text-xs text-slate-300 border border-slate-600 rounded px-2 py-1 focus:outline-none focus:border-blue-500">
+                                <option value="en">English</option>
+                                <option value="zh">中文</option>
+                                <option value="ja">日本語</option>
+                                <option value="ko">한국어</option>
+                            </select>
+                            <button @click="translateAll" :disabled="!subtitles.length" class="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1 rounded transition-colors flex items-center gap-1">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3 h-3"><path d="M7.75 2.75a.75.75 0 00-1.5 0v1.258a32.987 32.987 0 00-3.599.278.75.75 0 10.198 1.487A31.545 31.545 0 018.7 5.545 19.381 19.381 0 017 9.56a19.418 19.418 0 01-1.002-2.044.75.75 0 00-1.388.395 20.929 20.929 0 001.294 2.639 11.95 11.95 0 01-1.043 1.485 20.972 20.972 0 00-3.46 1.252.75.75 0 10.706 1.32C3.842 13.911 5.485 13.102 7 12.5c.313.123.616.26.908.408.81.41 1.637.766 2.492 1.054a.75.75 0 10.5-1.415 17.587 17.587 0 01-2.39-1.006A17.96 17.96 0 0110 8c.288-.636.54-1.29.743-1.96.16-.525.295-1.062.4-1.608a.75.75 0 10-1.47-.294A18.066 18.066 0 019.5 5.545v-2.8zM14 8a.75.75 0 00-.75.75v5.5c0 .414.336.75.75.75h5.5a.75.75 0 000-1.5h-3.69l3.97-3.97a.75.75 0 10-1.06-1.06l-3.97 3.97V8.75A.75.75 0 0014 8z" /></svg>
+                                翻译全文
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 工具栏 2: 基础操作 -->
+                <div class="px-3 py-2 border-b border-slate-700 bg-slate-800 flex justify-between items-center text-xs">
+                    <span class="text-slate-500">{{ subtitles.length }} 行</span>
+                    <div class="flex gap-2">
+                         <button @click="insertAtCurrent" :disabled="!mediaUrl" class="bg-blue-600/20 hover:bg-blue-600 text-blue-400 hover:text-white border border-blue-600/30 px-2 py-1 rounded transition-all">插入</button>
+                        <button @click="exportSRT" :disabled="!subtitles.length" class="bg-green-600/20 hover:bg-green-600 text-green-400 hover:text-white border border-green-600/30 px-2 py-1 rounded transition-all">导出</button>
+                    </div>
+                </div>
+                
+                <!-- 列表 -->
+                <div class="flex-1 overflow-y-auto p-2 space-y-2 relative" ref="subtitleList">
+                    <div v-if="subtitles.length === 0" class="h-full flex flex-col items-center justify-center text-slate-500 opacity-50">
+                        <p class="text-sm">暂无字幕数据</p>
+                    </div>
+
+                    <div v-for="(sub, idx) in subtitles" :key="idx" class="group bg-slate-900/40 hover:bg-slate-900/80 border border-slate-700/50 hover:border-slate-600 rounded-lg p-3 transition-all duration-200">
+                        <div class="flex items-center gap-2 mb-2">
+                            <span @click="seekTo(sub.start)" class="text-slate-500 w-6 text-right text-xs cursor-pointer hover:text-blue-400 font-mono select-none">{{ idx + 1 }}</span>
+                            <div class="relative flex items-center">
+                                <input v-model="sub.start" class="time-input">
+                                <button @click="syncTime(idx, 'start')" class="ml-1 text-slate-600 hover:text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity">⏱️</button>
+                            </div>
+                            <span class="text-slate-600 text-xs">→</span>
+                            <div class="relative flex items-center">
+                                <input v-model="sub.end" class="time-input">
+                                <button @click="syncTime(idx, 'end')" class="ml-1 text-slate-600 hover:text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity">⏱️</button>
+                            </div>
+                            <div class="flex-1"></div>
+                            <button @click="removeSub(idx)" class="text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity">🗑️</button>
+                        </div>
+                        <textarea v-model="sub.text" rows="1" class="w-full bg-transparent text-slate-200 text-sm focus:outline-none resize-none leading-relaxed pl-8 border-l-2 border-transparent focus:border-blue-500/50 transition-colors" @input="autoResize"></textarea>
+                    </div>
+                    <div class="h-10"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 文件编辑器模态框 -->
+        <div v-if="editor.visible" class="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+            <div class="bg-slate-800 w-full max-w-2xl rounded-xl border border-slate-600 shadow-2xl flex flex-col h-[80vh]">
+                <div class="p-4 border-b border-slate-700 flex justify-between items-center">
+                    <h3 class="font-bold text-white">编辑: {{ editor.filename }}</h3>
+                    <button @click="editor.visible = false" class="text-slate-400 hover:text-white">✕</button>
+                </div>
+                <textarea v-model="editor.content" class="flex-1 bg-slate-900 p-4 font-mono text-sm text-slate-300 focus:outline-none resize-none" spellcheck="false"></textarea>
+                <div class="p-4 border-t border-slate-700 flex justify-end gap-3">
+                    <button @click="editor.visible = false" class="px-4 py-2 rounded text-slate-300 hover:bg-slate-700">取消</button>
+                    <button @click="saveFile" class="px-4 py-2 rounded bg-blue-600 hover:bg-blue-500 text-white font-medium">保存修改</button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+    {% endraw %}
+
+    <script>
+        const { createApp, ref, nextTick } = Vue;
+
+        createApp({
+            setup() {
+                const config = ref({ host: '127.0.0.1', port: '6016' });
+                const currentFile = ref(null);
+                const mediaUrl = ref('');
+                const status = ref('就绪');
+                const progress = ref(0);
+                const isProcessing = ref(false);
+                const errorMsg = ref('');
+                const subtitles = ref([]);
+                const videoPlayer = ref(null);
+                const isDragging = ref(false);
+                
+                // 新增状态
+                const targetLang = ref('en');
+                const toggles = ref({ enHot: false, zhHot: false, rule: false });
+                const editor = ref({ visible: false, filename: '', content: '' });
+
+                // UUID
+                const uuidv4 = () => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+                    const r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+                    return v.toString(16);
+                });
+
+                // --- 1. Flask 交互逻辑 ---
+                
+                // 打开编辑器
+                const openEditor = async (filename) => {
+                    editor.value.filename = filename;
+                    editor.value.visible = true;
+                    try {
+                        const res = await fetch(`/api/file/${filename}`);
+                        const data = await res.json();
+                        if(data.error) throw new Error(data.error);
+                        editor.value.content = data.content;
+                    } catch (e) {
+                        alert('加载文件失败: ' + e.message);
+                    }
+                };
+
+                // 保存文件
+                const saveFile = async () => {
+                    try {
+                        const res = await fetch(`/api/file/${editor.value.filename}`, {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({ content: editor.value.content })
+                        });
+                        const data = await res.json();
+                        if(data.success) {
+                            editor.value.visible = false;
+                        } else {
+                            alert('保存失败: ' + data.error);
+                        }
+                    } catch (e) {
+                        alert('保存异常: ' + e.message);
+                    }
+                };
+
+                // 翻译全部 (逐句调用 Flask 接口)
+                const translateAll = async () => {
+                    if(!subtitles.value.length) return;
+                    // 标记状态
+                    const originalStatus = status.value;
+                    status.value = '正在翻译...';
+                    
+                    // 并行或串行处理，这里用简单的Promise.all
+                    const promises = subtitles.value.map(async (sub) => {
+                        try {
+                            const res = await fetch('/api/translate', {
+                                method: 'POST',
+                                headers: {'Content-Type': 'application/json'},
+                                body: JSON.stringify({ text: sub.text, lang: targetLang.value })
+                            });
+                            const data = await res.json();
+                            // 将翻译结果追加到原文本后，或者替换，这里演示追加
+                            sub.text = `${sub.text}\n${data.result}`;
+                        } catch(e) { console.error(e); }
+                    });
+
+                    await Promise.all(promises);
+                    status.value = originalStatus;
+                    nextTick(() => document.querySelectorAll('textarea').forEach(el => autoResize({target: el})));
+                };
+
+                // 文本预处理 (调用 Flask)
+                const processTextViaBackend = async (text) => {
+                    // 收集开启的开关
+                    const activeTypes = [];
+                    if(toggles.value.enHot) activeTypes.push('en-hot');
+                    if(toggles.value.zhHot) activeTypes.push('zh-hot');
+                    if(toggles.value.rule) activeTypes.push('rule');
+
+                    if(activeTypes.length === 0) return text;
+
+                    try {
+                        const res = await fetch('/api/process_text', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({ text: text, types: activeTypes })
+                        });
+                        const data = await res.json();
+                        return data.result;
+                    } catch(e) {
+                        console.error('Text processing failed', e);
+                        return text;
+                    }
+                };
+
+                // --- 2. 基础逻辑 (维持不变) ---
+
+                const handleFileSelect = (e) => processFile(e.target.files[0]);
+                const handleDrop = (e) => { isDragging.value = false; processFile(e.dataTransfer.files[0]); };
+                const processFile = (file) => {
+                    if (file) { currentFile.value = file; mediaUrl.value = URL.createObjectURL(file); subtitles.value = []; errorMsg.value = ''; progress.value = 0; }
+                };
+                const formatFileSize = (bytes) => {
+                    if (bytes === 0) return '0 B';
+                    const k = 1024; const sizes = ['B', 'KB', 'MB', 'GB'];
+                    const i = Math.floor(Math.log(bytes) / Math.log(k));
+                    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+                };
+
+                const processAudio = async () => {
+                    if (!currentFile.value) return;
+                    isProcessing.value = true;
+                    errorMsg.value = '';
+                    subtitles.value = [];
+                    progress.value = 0;
+
+                    try {
+                        status.value = '提取音频...';
+                        const fileBuffer = await currentFile.value.arrayBuffer();
+                        const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+                        const audioBuffer = await audioCtx.decodeAudioData(fileBuffer);
+                        const pcmData = audioBuffer.getChannelData(0); 
+                        
+                        status.value = '连接服务端...';
+                        const ws = new WebSocket(`ws://${config.value.host}:${config.value.port}`);
+                        
+                        ws.onopen = async () => {
+                            status.value = '上传数据...';
+                            const taskId = uuidv4();
+                            const chunkSize = 16000 * 60; 
+                            const float32ToByteString = (arr) => {
+                                const buffer = new ArrayBuffer(arr.length * 4);
+                                const view = new DataView(buffer);
+                                for(let i=0; i<arr.length; i++) view.setFloat32(i*4, arr[i], true); 
+                                return new Uint8Array(buffer).reduce((d, b) => d + String.fromCharCode(b), '');
+                            };
+                            let offset = 0;
+                            while (offset < pcmData.length) {
+                                if (ws.readyState !== 1) break;
+                                const end = Math.min(offset + chunkSize, pcmData.length);
+                                const chunk = pcmData.slice(offset, end);
+                                ws.send(JSON.stringify({
+                                    task_id: taskId, seg_duration: chunkSize/16000, seg_overlap: 2, is_final: end >= pcmData.length,
+                                    time_start: Date.now()/1000, time_frame: Date.now()/1000, source: 'file',
+                                    data: btoa(float32ToByteString(chunk))
+                                }));
+                                offset = end;
+                                progress.value = Math.min(90, Math.floor((offset / pcmData.length) * 100));
+                                await new Promise(r => setTimeout(r, 10));
+                            }
+                        };
+
+                        ws.onmessage = async (e) => {
+                            try {
+                                const data = JSON.parse(e.data);
+                                if (data.is_final && data.tokens) {
+                                    // 在解析前，先调用后端进行文本处理（如果开关打开）
+                                    if(toggles.value.enHot || toggles.value.zhHot || toggles.value.rule) {
+                                        data.text = await processTextViaBackend(data.text);
+                                    }
+                                    parseResult(data);
+                                    progress.value = 100; status.value = '完成'; ws.close(); isProcessing.value = false;
+                                }
+                            } catch (err) { console.error(err); }
+                        };
+                        ws.onerror = () => { isProcessing.value = false; errorMsg.value = '连接失败'; };
+                    } catch (err) { errorMsg.value = err.message; isProcessing.value = false; }
+                };
+
+                const parseResult = (data) => {
+                    const newSubs = [];
+                    const parts = data.text.split(/([，。？！?！,.?!])/).filter(s => s);
+                    let tokenIndex = 0;
+                    let isNewSentence = true;
+
+                    for (let i = 0; i < parts.length; i++) {
+                        const part = parts[i];
+                        if (!/^[，。？！?！,.?!]$/.test(part)) {
+                            let len = part.length;
+                            if (tokenIndex + len <= data.timestamps.length) {
+                                const start = tokenIndex > 0 ? data.timestamps[tokenIndex - 1] : 0;
+                                const end = data.timestamps[tokenIndex + len - 1];
+                                if (isNewSentence) {
+                                    newSubs.push({ start: formatTime(start), end: formatTime(end), text: part });
+                                    isNewSentence = false;
+                                } else {
+                                    newSubs[newSubs.length - 1].end = formatTime(end);
+                                    newSubs[newSubs.length - 1].text += part;
+                                }
+                                tokenIndex += len;
+                            }
+                        } else {
+                            if (newSubs.length) { newSubs[newSubs.length - 1].text += part; isNewSentence = true; }
+                        }
+                    }
+                    subtitles.value = newSubs;
+                    nextTick(() => document.querySelectorAll('textarea').forEach(el => autoResize({target: el})));
+                };
+
+                const formatTime = (s) => {
+                    if (isNaN(s)) return "00:00:00,000";
+                    const d = new Date(0); d.setMilliseconds(s * 1000);
+                    return d.toISOString().substr(11, 12).replace('.', ',');
+                };
+
+                const insertAtCurrent = () => {
+                    if (!videoPlayer.value) return;
+                    const t = formatTime(videoPlayer.value.currentTime);
+                    subtitles.value.push({ start: t, end: t, text: '' });
+                    nextTick(() => { 
+                        const list = document.querySelector('.overflow-y-auto'); list.scrollTop = list.scrollHeight; 
+                    });
+                };
+                const syncTime = (i, type) => { if (videoPlayer.value) subtitles.value[i][type] = formatTime(videoPlayer.value.currentTime); };
+                const removeSub = (i) => { if(confirm('删除此行?')) subtitles.value.splice(i, 1); };
+                const seekTo = (t) => { if(!videoPlayer.value) return; const [h,m,s] = t.replace(',','.').split(':'); videoPlayer.value.currentTime = parseFloat(h)*3600 + parseFloat(m)*60 + parseFloat(s); videoPlayer.value.play(); };
+                const autoResize = (e) => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; };
+                const exportSRT = () => {
+                    let c = ''; subtitles.value.forEach((s, i) => c += `${i+1}\n${s.start} --> ${s.end}\n${s.text}\n\n`);
+                    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([c],{type:'text/plain'})); a.download = (currentFile.value?.name||'sub')+'.srt'; a.click();
+                };
+
+                return { 
+                    config, currentFile, mediaUrl, status, progress, isProcessing, subtitles, errorMsg, videoPlayer, isDragging,
+                    toggles, targetLang, editor,
+                    processAudio, exportSRT, autoResize, handleFileSelect, handleDrop, formatFileSize,
+                    insertAtCurrent, syncTime, removeSub, seekTo,
+                    openEditor, saveFile, translateAll
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>

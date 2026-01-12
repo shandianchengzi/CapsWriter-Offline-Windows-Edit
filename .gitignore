@@ -4,3 +4,6 @@
 ffmpeg.exe
 models/paraformer-offline-zh
 models/punc_ct-transformer_cn-en
+
+__pycache__/
+env/**

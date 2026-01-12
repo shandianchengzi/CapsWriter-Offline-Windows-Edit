@@ -1,0 +1,6 @@
+sounddevice
+websockets
+pypinyin
+flask
+rich
+watchdog
