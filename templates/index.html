@@ -99,7 +99,14 @@
                             <span class="text-white font-semibold truncate">{{ currentFile ? currentFile.name : '未选择文件' }}</span>
                             <div class="flex gap-3 text-xs text-slate-500 mt-1">
                                 <span v-if="currentFile">{{ formatFileSize(currentFile.size) }}</span>
-                                <span v-if="mediaDuration > 0" class="text-blue-400">预计耗时: {{ (mediaDuration / 72).toFixed(1) }}s~{{ (mediaDuration / 16).toFixed(1) }}s</span>
+                                <!-- 显示实际耗时 -->
+                                <span v-if="processingTime > 0" class="text-emerald-400 font-bold">
+                                    实际耗时: {{ processingTime.toFixed(2) }}s
+                                </span>
+                                <!-- 显示预估耗时范围 -->
+                                <span v-else-if="mediaDuration > 0" class="text-blue-400">
+                                    预计耗时: {{ (mediaDuration / 72).toFixed(1) }}s ~ {{ (mediaDuration / 16).toFixed(1) }}s
+                                </span>
                             </div>
                         </div>
                         <span class="text-blue-400 font-bold ml-4">{{ progress }}%</span>
@@ -225,6 +232,7 @@
                 const status = ref('就绪');
                 const progress = ref(0);
                 const isProcessing = ref(false);
+                const processingTime = ref(0); // 新增：用于记录实际耗时
                 const errorMsg = ref('');
                 const subtitles = ref([]);
                 const videoPlayer = ref(null);
@@ -375,6 +383,8 @@
                     errorMsg.value = '';
                     subtitles.value = [];
                     progress.value = 0;
+                    processingTime.value = 0; // 重置实际耗时
+                    const startTime = Date.now(); // 记录开始时间
 
                     try {
                         status.value = '提取音频...';
@@ -382,12 +392,12 @@
                         const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
                         const audioBuffer = await audioCtx.decodeAudioData(fileBuffer);
                         const pcmData = audioBuffer.getChannelData(0); 
-                        
+
                         status.value = '连接服务端...';
                         const ws = new WebSocket(`ws://${config.value.host}:${config.value.port}`);
                         
                         ws.onopen = async () => {
-                            status.value = '上传数据...';
+                            status.value = '转录中...';
                             const taskId = uuidv4();
                             const chunkSize = 16000 * 60; 
                             const float32ToByteString = (arr) => {
@@ -420,6 +430,11 @@
                                         data.text = await processTextViaBackend(data.text);
                                     }
                                     parseResult(data);
+                                    
+                                    // 计算并显示实际耗时
+                                    const endTime = Date.now();
+                                    processingTime.value = (endTime - startTime) / 1000;
+                                    
                                     progress.value = 100; status.value = '完成'; ws.close(); isProcessing.value = false;
                                 }
                             } catch (err) { console.error(err); }
@@ -517,7 +532,7 @@
                 };
 
                 return { 
-                    config, currentFile, mediaUrl, mediaDuration, status, progress, isProcessing, subtitles, errorMsg, videoPlayer, isDragging,
+                    config, currentFile, mediaUrl, mediaDuration, status, progress, isProcessing, processingTime, subtitles, errorMsg, videoPlayer, isDragging,
                     toggles, targetLang, editor, exportConfig,
                     processAudio, exportSRT, exportTXT, exportJSON, autoResize, handleFileSelect, handleDrop, formatFileSize, onMediaLoaded,
                     insertAtCurrent, syncTime, removeSub, seekTo,
