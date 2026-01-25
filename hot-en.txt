@@ -34,6 +34,8 @@ Quicker
 WebSocket
 ID
 ChatGPT
+DeepSeek
+Agent
 
 # 杂项
 IP

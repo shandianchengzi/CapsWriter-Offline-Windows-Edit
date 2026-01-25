@@ -18,6 +18,12 @@
 叉叉叉 = xxx
 pilot = Copilot
 冒号 = ：
+仓库仓库仓库 =  GitHub 
+deep sick = DeepSeek
+克劳德 = Claude
+哈基米 = Gemini
 
 # Quicker 动作映射。如果你没装 Quicker 请删除这部分
-代码 = fc190626-8d00-4562-85e3-34c0580f074f
+VSCode = fc190626-8d00-4562-85e3-34c0580f074f
+查看状态 = 218111a5-7477-4210-bcd8-e2b837694350
+句号 = 6273b144-4bb0-4925-b0e4-cd351b1ab90d
