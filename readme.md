@@ -1,9 +1,21 @@
+作者突然时隔两年猛猛更新了！！！！！！！！！！！！！！！！！！！！！！！！！！！！！
+加了我整了很久都没整明白的语速语音模型！
+
+此仓库正式弃用！！！
+
+直接转作者的仓库吧！！
+https://github.com/HaujetZhao/CapsWriter-Offline
+
+后续我会另外开一个仓库，去做基于 CapsWriter 的纯网页端识别，因为我感觉到了很多东西还是得靠网页去进行分发。
+
+
+
 ## 介绍
 
-这仓库它是基于这个版本。我不会跟进作者的更新了，作者实际上也没有怎么更新，现在的版本已经很够我们用：https://github.com/HaujetZhao/CapsWriter-Offline/tree/a072f5312031e31706b294e9242d516fb8979fc6
+~~这仓库它是基于这个版本。我不会跟进作者的更新了，作者实际上也没有怎么更新，现在的版本已经很够我们用：https://github.com/HaujetZhao/CapsWriter-Offline/tree/a072f5312031e31706b294e9242d516fb8979fc6~~
 
 我省流介绍一下：
-1. 点开 https://github.com/shandianchengzi/CapsWriter-Offline-Windows-Edit/releases/tag/1 下载以下3个文件：
+1. 点开 https://github.com/shandianchengzi/CapsWriter-Offline-Windows-Edit/releases/tag/1 下载以下 3 个文件：
    1. Source code (zip)：下载之后先解压，然后把整个文件夹打开，这个文件夹是根目录。
    2. ffmpeg.exe：放到根目录。
    3. models.zip：解压后整个文件夹一起放到根目录。
@@ -26,17 +38,17 @@
 1. 实时更新一些网安常用的热词
 2. 配置里面禁用了保存录音文件的功能
 
-安装方式也有更新调整作者的那种安装方式，它相对来说不太方便用来更新配置和一些 server 和 client 的操作，因为他的代码的部分在也被打包到他的 release 的包里面去了，他没有被放到源代码那个环节……所以这里我就直接单开一个 Windows 的版本，然后不需要改动的exe，就永远也不要改动了，然后这个 git 仓库就只存需要改动的内容。
+安装方式也有更新调整作者的那种安装方式，它相对来说不太方便用来更新配置和一些 server 和 client 的操作，因为他的代码的部分在也被打包到他的 release 的包里面去了，他没有被放到源代码那个环节……所以这里我就直接单开一个 Windows 的版本，然后不需要改动的 exe，就永远也不要改动了，然后这个 git 仓库就只存需要改动的内容。
 
 功能上的更新：
-1. 增加特定的词响应相关的Quicker动作，支持hot-rule.txt中添加动作的关联，如：
-代码 = fc190626-8d00-4562-85e3-34c0580f074f。关于这个特性，我发了篇博客，更详细的介绍，可以在博客里面看：[【开源工具】离线语音识别接入Quicker，冬天懒得打字甚至懒得动就这样｜CapsWriter-Offline-Windows-Edit-CSDN博客](https://blog.csdn.net/qq_46106285/article/details/156833033)
+1. 增加特定的词响应相关的 Quicker 动作，支持 hot-rule.txt 中添加动作的关联，如：
+代码 = fc190626-8d00-4562-85e3-34c0580f074f。关于这个特性，我发了篇博客，更详细的介绍，可以在博客里面看：[【开源工具】离线语音识别接入 Quicker，冬天懒得打字甚至懒得动就这样｜CapsWriter-Offline-Windows-Edit-CSDN 博客](https://blog.csdn.net/qq_46106285/article/details/156833033)
 ![alt text](assets/quicker.png)
 
-2. 支持不保存wav文件，只保存md文件。
+2. 支持不保存 wav 文件，只保存 md 文件。
 
 3. 新增对音视频文件的转录功能时的热词替换功能。
 
-4. 新增web_client支持，支持在浏览器中运行音视频转录功能，和字幕编辑等功能。
+4. 新增 web_client 支持，支持在浏览器中运行音视频转录功能，和字幕编辑等功能。
 
-5. 支持通过 Vercel 部署，实现无服务器的部署。但是现在存在问题，由于txt资源文件不知道怎么正确打包，热词替换功能在 Vercel 部署的时候尚且无法使用。
+5. 支持通过 Vercel 部署，实现无服务器的部署。但是现在存在问题，由于 txt 资源文件不知道怎么正确打包，热词替换功能在 Vercel 部署的时候尚且无法使用。
